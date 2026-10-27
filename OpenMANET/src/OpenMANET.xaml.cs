@@ -1844,7 +1844,24 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		{
 			foreach (OpenMANET_NodeInfo lastNode in _lastNodes)
 			{
-				stringBuilder.AppendLine("- " + (includeOperationalIdentifiers ? DiagnosticText(lastNode.Name ?? "Unknown", includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : openMANET_DiagnosticRedactor.Alias(lastNode.Name ?? lastNode.MacAddress, "Node")) + " | Role=" + lastNode.RoleDisplay + " | Status=" + lastNode.StatusDisplay + " | Address=" + (includeOperationalIdentifiers ? DiagnosticText(lastNode.Address ?? "--", includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : "[redacted]") + " | MAC=" + (includeOperationalIdentifiers ? DiagnosticText(lastNode.MacAddress, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : "[redacted]") + " | Hops=" + lastNode.HopsDisplay + " | RSSI=" + lastNode.RssiDisplay + " | Link=" + lastNode.ThroughputDisplay + " | Route=" + (includeOperationalIdentifiers ? DiagnosticText(lastNode.RouteInterfaceDisplay, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : "[redacted]") + " | LastSeen=" + lastNode.LinkAgeDisplay);
+				stringBuilder.AppendLine("- " + (includeOperationalIdentifiers ? DiagnosticText(lastNode.Name ?? "Unknown", includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : openMANET_DiagnosticRedactor.Alias(lastNode.Name ?? lastNode.MacAddress, "Node")) + " | Role=" + lastNode.RoleDisplay + " | Status=" + lastNode.StatusDisplay + " | Address=" + (includeOperationalIdentifiers ? DiagnosticText(lastNode.Address ?? "--", includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : "[redacted]") + " | MAC=" + (includeOperationalIdentifiers ? DiagnosticText(lastNode.MacAddress, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : "[redacted]") + " | Hops=" + lastNode.HopsDisplay + " | RSSI=" + lastNode.RssiDisplay + " | Link=" + lastNode.ThroughputDisplay + " | Route=" + (includeOperationalIdentifiers ? DiagnosticText(lastNode.RouteInterfaceDisplay, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : "[redacted]") + " | LastSeen=" + lastNode.LinkAgeDisplay + " | Routed=" + (lastNode.IsRouted ? "yes" : "no") + " | LiveLink=" + (lastNode.HasLiveLink ? "yes" : "no"));
+			}
+		}
+		AppendDiagnosticSection(stringBuilder, "MESH NEIGHBORS (RAW)");
+		if (_client.LastNeighborDiagnostics.Count == 0)
+		{
+			stringBuilder.AppendLine("No radio neighbors reported.");
+		}
+		foreach (string neighborLine in _client.LastNeighborDiagnostics)
+		{
+			stringBuilder.AppendLine("- " + DiagnosticText(neighborLine, includeOperationalIdentifiers, openMANET_DiagnosticRedactor));
+		}
+		if (includeOperationalIdentifiers && _lastTopology != null)
+		{
+			stringBuilder.AppendLine("Topology node MACs:");
+			foreach (OpenMANET_TopologyNodeInfo topologyNode in _lastTopology.Nodes)
+			{
+				stringBuilder.AppendLine("- " + DiagnosticText(topologyNode.NameDisplay, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) + " | MAC=" + topologyNode.MacDisplay + " | Secondary=" + ((topologyNode.SecondaryMacs.Count == 0) ? "--" : string.Join(", ", topologyNode.SecondaryMacs)) + " | Hops=" + topologyNode.HopsDisplay);
 			}
 		}
 		AppendDiagnosticSection(stringBuilder, "TOPOLOGY");

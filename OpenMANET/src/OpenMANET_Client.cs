@@ -361,6 +361,9 @@ internal sealed class OpenMANET_Client : IDisposable
 	/// <summary>Endpoints that failed on the latest refresh, mapped to an operator-safe message.</summary>
 	public IReadOnlyDictionary<string, string> LastRefreshFailures { get; private set; } = new Dictionary<string, string>();
 
+	/// <summary>One line per radio neighbor from the last refresh, for diagnostic snapshots.</summary>
+	public IReadOnlyList<string> LastNeighborDiagnostics { get; private set; } = new List<string>();
+
 	public async Task LoginAsync(string host, int port, string username, string password, bool allowInsecureHttp, CancellationToken cancellationToken)
 	{
 		Uri uri = OpenMANET_Security.BuildEndpoint(host, port, allowInsecureHttp);
@@ -511,6 +514,8 @@ internal sealed class OpenMANET_Client : IDisposable
 				}
 			}
 		}
+		HashSet<string> selfMacs = GetSelfMacs(topology);
+		HashSet<MeshNeighborResponse> matchedNeighbors = new HashSet<MeshNeighborResponse>();
 		List<OpenMANET_NodeInfo> list2 = new List<OpenMANET_NodeInfo>();
 		HashSet<string> hashSet2 = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		if (knownNodes?.Nodes == null)
@@ -529,9 +534,26 @@ internal sealed class OpenMANET_Client : IDisposable
 			hashSet2.Add(nodeKey);
 			string text = node3.Hostname?.Trim();
 			bool routed = !string.IsNullOrWhiteSpace(text) && hashSet.Contains(text);
-			List<MeshNeighborResponse> list3 = FindMatchingNeighbors(node3, list);
+			TopologyNodeResponse value = null;
+			if (!string.IsNullOrWhiteSpace(node3.MacAddress))
+			{
+				dictionary2.TryGetValue(node3.MacAddress.Trim(), out value);
+			}
+			if (value == null && !string.IsNullOrWhiteSpace(text))
+			{
+				dictionary.TryGetValue(text, out value);
+			}
+			// The radio neighbor table reports the wlh0 MAC, which differs from the node's primary
+			// MAC; match on every MAC the topology knows for this node.
+			HashSet<string> nodeMacs = GetNodeMacs(node3, value);
+			List<MeshNeighborResponse> list3 = FindMatchingNeighbors(node3, nodeMacs, list);
 			MeshNeighborResponse meshNeighborResponse = SelectBestNeighbor(list3);
-			bool liveLink = IsFreshLink(meshNeighborResponse);
+			foreach (MeshNeighborResponse matched in list3)
+			{
+				matchedNeighbors.Add(matched);
+			}
+			bool directEdge = HasDirectEdgeFromSelf(topology, selfMacs, nodeMacs);
+			bool liveLink = IsFreshLink(meshNeighborResponse) || directEdge;
 			bool flag = routed || liveLink;
 			if (flag)
 			{
@@ -545,15 +567,6 @@ internal sealed class OpenMANET_Client : IDisposable
 			TimeSpan timeSpan = utcNow - _lastSeenByNode[nodeKey];
 			if (flag || !(timeSpan >= StaleRetention))
 			{
-				TopologyNodeResponse value = null;
-				if (!string.IsNullOrWhiteSpace(node3.MacAddress))
-				{
-					dictionary2.TryGetValue(node3.MacAddress.Trim(), out value);
-				}
-				if (value == null && !string.IsNullOrWhiteSpace(text))
-				{
-					dictionary.TryGetValue(text, out value);
-				}
 				list2.Add(new OpenMANET_NodeInfo
 				{
 					Name = (string.IsNullOrWhiteSpace(node3.Hostname) ? "Unknown node" : node3.Hostname),
@@ -584,6 +597,7 @@ internal sealed class OpenMANET_Client : IDisposable
 			}
 		}
 		RemoveMissingTrackedNodes(hashSet2);
+		LastNeighborDiagnostics = BuildNeighborDiagnostics(list, matchedNeighbors);
 		return list2;
 	}
 
@@ -644,6 +658,7 @@ internal sealed class OpenMANET_Client : IDisposable
 		LastTopology = null;
 		LastSystemDetails = null;
 		LastRefreshFailures = new Dictionary<string, string>();
+		LastNeighborDiagnostics = new List<string>();
 		_lastKnownNodes = null;
 		_lastTopologyResponse = null;
 		_lastNeighbors = null;
@@ -795,7 +810,91 @@ internal sealed class OpenMANET_Client : IDisposable
 		return "unknown";
 	}
 
-	private static List<MeshNeighborResponse> FindMatchingNeighbors(NodeResponse node, List<MeshNeighborResponse> neighbors)
+	private static HashSet<string> GetNodeMacs(NodeResponse node, TopologyNodeResponse topologyNode)
+	{
+		HashSet<string> macs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		AddMac(macs, node?.MacAddress);
+		AddMac(macs, topologyNode?.MacAddress);
+		if (topologyNode?.SecondaryMacs != null)
+		{
+			foreach (string mac in topologyNode.SecondaryMacs)
+			{
+				AddMac(macs, mac);
+			}
+		}
+		return macs;
+	}
+
+	private static HashSet<string> GetSelfMacs(MeshTopology topology)
+	{
+		HashSet<string> macs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		AddMac(macs, topology?.SelfMac);
+		if (topology?.Nodes != null)
+		{
+			foreach (TopologyNodeResponse node in topology.Nodes)
+			{
+				if (node != null && node.IsSelf)
+				{
+					foreach (string mac in GetNodeMacs(null, node))
+					{
+						macs.Add(mac);
+					}
+				}
+			}
+		}
+		return macs;
+	}
+
+	private static void AddMac(HashSet<string> macs, string mac)
+	{
+		if (!string.IsNullOrWhiteSpace(mac))
+		{
+			macs.Add(mac.Trim());
+		}
+	}
+
+	/// <summary>
+	/// True when the local node's own topology has a non-BLOS edge to this node. That edge
+	/// comes from the local neighbor table, so it is live even before a route exists.
+	/// </summary>
+	private static bool HasDirectEdgeFromSelf(MeshTopology topology, HashSet<string> selfMacs, HashSet<string> nodeMacs)
+	{
+		if (topology?.Edges == null || selfMacs.Count == 0 || nodeMacs.Count == 0)
+		{
+			return false;
+		}
+		foreach (TopologyEdgeResponse edge in topology.Edges)
+		{
+			if (edge == null || edge.IsBlos || string.IsNullOrWhiteSpace(edge.FromMac) || string.IsNullOrWhiteSpace(edge.ToMac))
+			{
+				continue;
+			}
+			string from = edge.FromMac.Trim();
+			string to = edge.ToMac.Trim();
+			if ((selfMacs.Contains(from) && nodeMacs.Contains(to)) || (selfMacs.Contains(to) && nodeMacs.Contains(from)))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static IReadOnlyList<string> BuildNeighborDiagnostics(List<MeshNeighborResponse> neighbors, HashSet<MeshNeighborResponse> matched)
+	{
+		List<string> lines = new List<string>();
+		foreach (MeshNeighborResponse neighbor in neighbors)
+		{
+			if (neighbor == null)
+			{
+				continue;
+			}
+			long? lastSeen = GetLastSeenMilliseconds(neighbor.LastSeen);
+			lines.Add((string.IsNullOrWhiteSpace(neighbor.Neighbor) ? "(no identifier)" : neighbor.Neighbor) + " | HW=" + (string.IsNullOrWhiteSpace(neighbor.HardwareAddress) ? "--" : neighbor.HardwareAddress) + " | LastSeen=" + (lastSeen.HasValue ? lastSeen.Value.ToString(CultureInfo.InvariantCulture) + " ms" : "--") + " | Throughput=" + neighbor.Throughput.ToString(CultureInfo.InvariantCulture) + " kbit/s | " + (matched.Contains(neighbor) ? "Matched to a node" : "UNMATCHED"));
+		}
+		return lines;
+	}
+
+	private static List<MeshNeighborResponse> FindMatchingNeighbors(NodeResponse node, HashSet<string> nodeMacs, List<MeshNeighborResponse> neighbors)
 	{
 		List<MeshNeighborResponse> list = new List<MeshNeighborResponse>();
 		if (node == null || neighbors == null)
@@ -806,7 +905,7 @@ internal sealed class OpenMANET_Client : IDisposable
 		{
 			if (neighbor != null)
 			{
-				bool num = !string.IsNullOrWhiteSpace(node.MacAddress) && !string.IsNullOrWhiteSpace(neighbor.HardwareAddress) && string.Equals(node.MacAddress.Trim(), neighbor.HardwareAddress.Trim(), StringComparison.OrdinalIgnoreCase);
+				bool num = !string.IsNullOrWhiteSpace(neighbor.HardwareAddress) && nodeMacs.Contains(neighbor.HardwareAddress.Trim());
 				bool flag = NeighborIdentifierMatchesHostname(neighbor.Neighbor, node.Hostname);
 				if (num | flag)
 				{
