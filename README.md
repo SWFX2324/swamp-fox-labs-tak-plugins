@@ -6,7 +6,7 @@ Plugins for the TAK (Team Awareness Kit) ecosystem from Swamp Fox Labs.
 
 | Plugin | Platform | Latest | What it does |
 | --- | --- | --- | --- |
-| [OpenMANET](wintak/OpenMANET) | WinTAK 5.7.0.144 (x64) | [2.0.7.2](https://github.com/SWFX2324/swamp-fox-labs-tak-plugins/releases/latest) | Monitors an OpenMANET HaLow mesh from inside WinTAK: node status, link quality, live topology, gateway health and mesh events. |
+| [OpenMANET](wintak/OpenMANET) | WinTAK 5.7.0.144 (x64) | [![Latest release](https://img.shields.io/github/v/release/SWFX2324/swamp-fox-labs-tak-plugins?label=&color=4C9AFF)](https://github.com/SWFX2324/swamp-fox-labs-tak-plugins/releases/latest) | Monitors an OpenMANET HaLow mesh from inside WinTAK: node status, link quality, live topology, gateway health, mesh events, WinTAK alerts and automatic reconnect. |
 
 ### OpenMANET for WinTAK
 

@@ -1,5 +1,7 @@
 # OpenMANET for WinTAK
 
+[![Latest release](https://img.shields.io/github/v/release/SWFX2324/swamp-fox-labs-tak-plugins?label=latest&color=4C9AFF)](https://github.com/SWFX2324/swamp-fox-labs-tak-plugins/releases/latest)
+
 A WinTAK plugin for monitoring an OpenMANET HaLow mesh from a WinTAK client. It shows mesh nodes, link quality, topology, gateway health and mesh events in a docked pane.
 
 - **Dashboard:** nodes online, mesh bandwidth, throughput and utilization, plus the node list and a mesh event log.
@@ -47,6 +49,16 @@ Node status:
 3. Start WinTAK, open the OpenMANET pane, then enter the node address and credentials under **Settings**.
 
 When upgrading, remove the old `WinTAK_OpenMANET_Plugin.dll` from `%APPDATA%\WinTAK\Plugins` first, and restart WinTAK completely.
+
+## Version history
+
+Full notes and downloads are on the [Releases](https://github.com/SWFX2324/swamp-fox-labs-tak-plugins/releases) page.
+
+| Version | Highlights |
+| --- | --- |
+| **2.0.8.0** | WinTAK notifications for node, link, gateway and connection events; a health dot on the toolbar icon; automatic reconnect after node reboots; callsign export/import. |
+| 2.0.7.2 | New UI; Online as soon as a direct RF link is live; Discovering state; powered-off nodes go Stale in about 30 s; vanity callsigns; the connected node is listed. |
+| 2.0.5.0 | Monitoring continues with the pane closed; 15-second polling, where one failed request no longer blanks the rest; steadier threshold warnings. |
 
 ## Build
 
