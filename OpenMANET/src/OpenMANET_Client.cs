@@ -313,6 +313,10 @@ internal sealed class OpenMANET_Client : IDisposable
 
 	private static readonly TimeSpan StaleRetention = TimeSpan.FromMinutes(5.0);
 
+	// A direct neighbor heard within this window is live even before BATMAN gossip has
+	// produced a route to it, which can take several minutes after a node boots.
+	private const long FreshLinkMilliseconds = 15000L;
+
 	private const string LoginPath = "auth/login";
 
 	private const string LogoutPath = "auth/logout";
@@ -328,6 +332,9 @@ internal sealed class OpenMANET_Client : IDisposable
 	private const string ListNetworkInterfacesPath = "openmanet.network_interface.v1.NetworkInterfaceService/ListNetworkInterfaces";
 
 	private readonly Dictionary<string, DateTimeOffset> _lastSeenByNode = new Dictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
+
+	// Nodes seen online at least once this session; the rest are still being discovered.
+	private readonly HashSet<string> _everOnlineNodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 	private HttpClient _httpClient;
 
@@ -509,6 +516,7 @@ internal sealed class OpenMANET_Client : IDisposable
 		if (knownNodes?.Nodes == null)
 		{
 			_lastSeenByNode.Clear();
+			_everOnlineNodes.Clear();
 			return list2;
 		}
 		foreach (NodeResponse node3 in knownNodes.Nodes)
@@ -520,10 +528,15 @@ internal sealed class OpenMANET_Client : IDisposable
 			string nodeKey = GetNodeKey(node3);
 			hashSet2.Add(nodeKey);
 			string text = node3.Hostname?.Trim();
-			bool flag = !string.IsNullOrWhiteSpace(text) && hashSet.Contains(text);
+			bool routed = !string.IsNullOrWhiteSpace(text) && hashSet.Contains(text);
+			List<MeshNeighborResponse> list3 = FindMatchingNeighbors(node3, list);
+			MeshNeighborResponse meshNeighborResponse = SelectBestNeighbor(list3);
+			bool liveLink = IsFreshLink(meshNeighborResponse);
+			bool flag = routed || liveLink;
 			if (flag)
 			{
 				_lastSeenByNode[nodeKey] = utcNow;
+				_everOnlineNodes.Add(nodeKey);
 			}
 			else if (!_lastSeenByNode.ContainsKey(nodeKey))
 			{
@@ -541,14 +554,15 @@ internal sealed class OpenMANET_Client : IDisposable
 				{
 					dictionary.TryGetValue(text, out value);
 				}
-				List<MeshNeighborResponse> list3 = FindMatchingNeighbors(node3, list);
-				MeshNeighborResponse meshNeighborResponse = SelectBestNeighbor(list3);
 				list2.Add(new OpenMANET_NodeInfo
 				{
 					Name = (string.IsNullOrWhiteSpace(node3.Hostname) ? "Unknown node" : node3.Hostname),
 					Address = (string.IsNullOrWhiteSpace(node3.IpAddress) ? "No IP address" : node3.IpAddress),
 					MacAddress = (string.IsNullOrWhiteSpace(node3.MacAddress) ? "--" : node3.MacAddress),
 					IsOnline = flag,
+					IsRouted = routed,
+					HasLiveLink = liveLink,
+					IsDiscovering = !flag && !_everOnlineNodes.Contains(nodeKey),
 					IsSelf = (value?.IsSelf ?? false),
 					IsGateway = (value?.IsGateway ?? false),
 					Segment = value?.Segment,
@@ -634,6 +648,7 @@ internal sealed class OpenMANET_Client : IDisposable
 		_lastTopologyResponse = null;
 		_lastNeighbors = null;
 		_lastSeenByNode.Clear();
+		_everOnlineNodes.Clear();
 		if (_httpClient != null)
 		{
 			_httpClient.Dispose();
@@ -749,6 +764,18 @@ internal sealed class OpenMANET_Client : IDisposable
 		{
 			_lastSeenByNode.Remove(item);
 		}
+		_everOnlineNodes.IntersectWith(_lastSeenByNode.Keys);
+	}
+
+	private static bool IsFreshLink(MeshNeighborResponse neighbor)
+	{
+		if (neighbor == null)
+		{
+			return false;
+		}
+		// The neighbor table only lists current neighbors, so an entry without an age still counts.
+		long? lastSeen = GetLastSeenMilliseconds(neighbor.LastSeen);
+		return !lastSeen.HasValue || lastSeen.Value <= FreshLinkMilliseconds;
 	}
 
 	private static string GetNodeKey(NodeResponse node)

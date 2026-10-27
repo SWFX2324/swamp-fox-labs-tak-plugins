@@ -60,6 +60,11 @@ internal sealed class OpenMANET_DiagnosticRedactor
 		while (num < value.Length)
 		{
 			int num2 = value.IndexOf(search, num, StringComparison.OrdinalIgnoreCase);
+			// Skip matches inside a longer token so "Node1" doesn't rewrite part of "Node10".
+			while (num2 >= 0 && !IsWholeToken(value, num2, search.Length))
+			{
+				num2 = value.IndexOf(search, num2 + 1, StringComparison.OrdinalIgnoreCase);
+			}
 			if (num2 < 0)
 			{
 				stringBuilder.Append(value, num, value.Length - num);
@@ -70,5 +75,19 @@ internal sealed class OpenMANET_DiagnosticRedactor
 			num = num2 + search.Length;
 		}
 		return stringBuilder.ToString();
+	}
+
+	private static bool IsWholeToken(string value, int start, int length)
+	{
+		int end = start + length;
+		bool startsClean = start == 0 || !IsTokenChar(value[start - 1]) || !IsTokenChar(value[start]);
+		bool endsClean = end >= value.Length || !IsTokenChar(value[end]) || !IsTokenChar(value[end - 1]);
+		return startsClean && endsClean;
+	}
+
+	private static bool IsTokenChar(char c)
+	{
+		// Separators like '_' and '.' stay boundaries so "Node0_wlan0" still redacts "Node0".
+		return char.IsLetterOrDigit(c);
 	}
 }

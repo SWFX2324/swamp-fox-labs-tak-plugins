@@ -28,6 +28,15 @@ internal sealed class OpenMANET_NodeInfo
 
 	public bool IsOnline { get; set; }
 
+	/// <summary>The local node's topology has a route to this node.</summary>
+	public bool IsRouted { get; set; }
+
+	/// <summary>This node is a direct neighbor heard recently, whether or not a route exists yet.</summary>
+	public bool HasLiveLink { get; set; }
+
+	/// <summary>Listed by the node service but not yet reachable since it first appeared.</summary>
+	public bool IsDiscovering { get; set; }
+
 	public bool IsSelf { get; set; }
 
 	public bool IsGateway { get; set; }
@@ -80,11 +89,80 @@ internal sealed class OpenMANET_NodeInfo
 		{
 			if (!IsOnline)
 			{
-				return "Stale";
+				return IsDiscovering ? "Discovering" : "Stale";
 			}
 			return "Online";
 		}
 	}
+
+	public string StatusDetailDisplay
+	{
+		get
+		{
+			if (IsSelf)
+			{
+				return "Local node";
+			}
+			if (IsOnline && !IsRouted)
+			{
+				return "Direct link up, route pending";
+			}
+			if (IsOnline)
+			{
+				return HasLiveLink ? "Routed, direct link up" : "Routed";
+			}
+			return IsDiscovering ? "Listed, waiting for a route or link" : "No route or recent link";
+		}
+	}
+
+	public string Initial
+	{
+		get
+		{
+			if (string.IsNullOrWhiteSpace(Name))
+			{
+				return "?";
+			}
+			string trimmed = Name.Trim();
+			char last = trimmed[trimmed.Length - 1];
+			// "Node0" reads better as "0" than "N" when every hostname shares a prefix.
+			return char.IsDigit(last) ? last.ToString() : char.ToUpperInvariant(trimmed[0]).ToString();
+		}
+	}
+
+	/// <summary>Signal strength as 0-4 bars, for the compact node list.</summary>
+	public int SignalBars
+	{
+		get
+		{
+			int? rssi = CurrentRssi ?? Rssi;
+			if (!rssi.HasValue)
+			{
+				return 0;
+			}
+			if (rssi.Value >= -55)
+			{
+				return 4;
+			}
+			if (rssi.Value >= -67)
+			{
+				return 3;
+			}
+			if (rssi.Value >= -75)
+			{
+				return 2;
+			}
+			return 1;
+		}
+	}
+
+	public bool SignalBar1Lit => SignalBars >= 1;
+
+	public bool SignalBar2Lit => SignalBars >= 2;
+
+	public bool SignalBar3Lit => SignalBars >= 3;
+
+	public bool SignalBar4Lit => SignalBars >= 4;
 
 	public string SegmentDisplay
 	{
@@ -108,7 +186,8 @@ internal sealed class OpenMANET_NodeInfo
 			}
 			if (!HopsFromSelf.HasValue || HopsFromSelf.Value >= 99)
 			{
-				return "Unknown";
+				// A live direct neighbor is one hop away even before the route table says so.
+				return HasLiveLink ? "1 Hop" : "Unknown";
 			}
 			if (HopsFromSelf != 1)
 			{
@@ -164,9 +243,9 @@ internal sealed class OpenMANET_NodeInfo
 		{
 			if (!IsOnline)
 			{
-				return "Offline";
+				return IsDiscovering ? "Discovering" : "Offline";
 			}
-			if (!IsSelf && GossipStale)
+			if (!IsSelf && (GossipStale || !IsRouted))
 			{
 				return "Degraded";
 			}

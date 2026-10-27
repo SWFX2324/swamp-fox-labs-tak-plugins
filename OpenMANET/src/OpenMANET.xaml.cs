@@ -59,6 +59,10 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 		public bool IsOnline { get; set; }
 
+		public bool IsDiscovering { get; set; }
+
+		public bool IsRouted { get; set; }
+
 		public int? HopsFromSelf { get; set; }
 
 		public string RouteInterface { get; set; }
@@ -77,6 +81,8 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			{
 				Name = (string.IsNullOrWhiteSpace(node.Name) ? "Unknown node" : node.Name),
 				IsOnline = node.IsOnline,
+				IsDiscovering = node.IsDiscovering,
+				IsRouted = node.IsRouted,
 				HopsFromSelf = node.HopsFromSelf,
 				RouteInterface = node.RouteInterfaceDisplay,
 				Rssi = rssi,
@@ -170,6 +176,13 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	private const double CriticalUtilizationPercent = 80.0;
 
 	private const int PoorRssiThresholdDbm = -75;
+
+	// Code-behind status colors, matching the Success/Warning/Danger brushes in OpenMANET.xaml.
+	private static readonly SolidColorBrush SuccessIndicatorBrush = CreateFrozenBrush(0x3D, 0xD6, 0x8C);
+
+	private static readonly SolidColorBrush WarningIndicatorBrush = CreateFrozenBrush(0xF2, 0xB5, 0x4A);
+
+	private static readonly SolidColorBrush DangerIndicatorBrush = CreateFrozenBrush(0xF2, 0x6D, 0x6D);
 
 	// Hysteresis bands: a warning starts at its threshold but only clears once the value is
 	// back past threshold +/- band, so readings hovering near a threshold at the 5-15 s poll
@@ -345,7 +358,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			_operationCancellation = new CancellationTokenSource();
 			ConnectButton.IsEnabled = false;
 			ConnectionStatusText.Text = "Connecting...";
-			ConnectionStatusIndicator.Fill = Brushes.Goldenrod;
+			ConnectionStatusIndicator.Fill = WarningIndicatorBrush;
 			await _client.LoginAsync(GatewayHostTextBox.Text.Trim(), port, UsernameTextBox.Text.Trim(), password, AllowInsecureHttpCheckBox.IsChecked == true, _operationCancellation.Token);
 			SaveConnectionSettings();
 			GatewayStatusText.Text = $"{GatewayHostTextBox.Text.Trim()}:{port}";
@@ -458,6 +471,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			}
 			int count = list.FindAll((OpenMANET_NodeInfo node) => node.IsOnline).Count;
 			NodeCountText.Text = count.ToString();
+			NodeTotalText.Text = "of " + list.Count.ToString(CultureInfo.InvariantCulture);
 			LastPollText.Text = DateTime.Now.ToString("HH:mm:ss");
 			UpdateHealthFindings();
 		}
@@ -851,7 +865,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			_currentUtilizationPercent = null;
 			UtilizationCurrentValueText.Text = "—";
 			UtilizationProgressBar.Value = 0.0;
-			UtilizationProgressBar.Foreground = (FindResource("MetricBrush") as Brush) ?? Brushes.Teal;
+			UtilizationProgressBar.Foreground = (FindResource("MetricBrush") as Brush) ?? SuccessIndicatorBrush;
 			UtilizationCurrentValueText.Foreground = UtilizationProgressBar.Foreground;
 			UtilizationStatusText.Text = "Waiting for bandwidth and throughput samples";
 			return;
@@ -870,17 +884,17 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		string text2 = NextUtilizationState(_utilizationState, num);
 		if (text2 == "Critical")
 		{
-			foreground = (FindResource("DangerBrush") as Brush) ?? Brushes.Tomato;
+			foreground = (FindResource("DangerBrush") as Brush) ?? DangerIndicatorBrush;
 			text = "High utilization relative to estimated link capacity";
 		}
 		else if (text2 == "Warning")
 		{
-			foreground = (FindResource("WarningBrush") as Brush) ?? Brushes.Goldenrod;
+			foreground = (FindResource("WarningBrush") as Brush) ?? WarningIndicatorBrush;
 			text = "Elevated utilization relative to estimated link capacity";
 		}
 		else
 		{
-			foreground = (FindResource("MetricBrush") as Brush) ?? Brushes.Teal;
+			foreground = (FindResource("MetricBrush") as Brush) ?? SuccessIndicatorBrush;
 			text = "Throughput compared with conservative mesh bandwidth";
 		}
 		if (!string.Equals(_utilizationState, text2, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(_utilizationState))
@@ -988,7 +1002,11 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				}
 				else if (!value.IsOnline && value2.IsOnline)
 				{
-					AddMeshEvent("INFO", value2.Name + " recovered.");
+					AddMeshEvent("INFO", value2.Name + (value.IsDiscovering ? " came online." : " recovered."));
+				}
+				if (value.IsOnline && value2.IsOnline && !value.IsRouted && value2.IsRouted)
+				{
+					AddMeshEvent("INFO", value2.Name + " route established.");
 				}
 				if (value.HopsFromSelf != value2.HopsFromSelf && value.HopsFromSelf.HasValue && value2.HopsFromSelf.HasValue)
 				{
@@ -1092,6 +1110,13 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	}
 
 	/// <summary>True once value reaches threshold; stays true until it falls below threshold - band.</summary>
+	private static SolidColorBrush CreateFrozenBrush(byte r, byte g, byte b)
+	{
+		SolidColorBrush brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+		brush.Freeze();
+		return brush;
+	}
+
 	private static bool IsAboveWithHysteresis(bool wasAbove, double value, double threshold, double band)
 	{
 		return value >= (wasAbove ? threshold - band : threshold);
@@ -1119,29 +1144,29 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		bool flag2 = false;
 		if (!_isConnected)
 		{
-			AddHealthFinding("OpenMANET gateway is not connected.", Brushes.Tomato, critical: true);
+			AddHealthFinding("OpenMANET gateway is not connected.", DangerIndicatorBrush, critical: true);
 			flag = true;
 		}
 		else
 		{
 			if (AllowInsecureHttpCheckBox.IsChecked == true)
 			{
-				AddHealthFinding("Connection uses insecure HTTP; credentials, the bearer token, and telemetry are not encrypted.", Brushes.Goldenrod, critical: false);
+				AddHealthFinding("Connection uses insecure HTTP; credentials, the bearer token, and telemetry are not encrypted.", WarningIndicatorBrush, critical: false);
 				flag2 = true;
 			}
 			if (_lastNodes.Count == 0)
 			{
-				AddHealthFinding("No mesh nodes are reporting.", Brushes.Tomato, critical: true);
+				AddHealthFinding("No mesh nodes are reporting.", DangerIndicatorBrush, critical: true);
 				flag = true;
 			}
 			if (_refreshFailureActive)
 			{
-				AddHealthFinding("The latest OpenMANET poll failed; displayed data may be stale.", Brushes.Goldenrod, critical: false);
+				AddHealthFinding("The latest OpenMANET poll failed; displayed data may be stale.", WarningIndicatorBrush, critical: false);
 				flag2 = true;
 			}
 			foreach (KeyValuePair<string, string> endpointFailure in _endpointFailures)
 			{
-				AddHealthFinding(endpointFailure.Key + " unavailable; showing last known data. " + endpointFailure.Value, Brushes.Goldenrod, critical: false);
+				AddHealthFinding(endpointFailure.Key + " unavailable; showing last known data. " + endpointFailure.Value, WarningIndicatorBrush, critical: false);
 				flag2 = true;
 			}
 			foreach (OpenMANET_NodeInfo lastNode in _lastNodes)
@@ -1149,35 +1174,35 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				string text = (string.IsNullOrWhiteSpace(lastNode.Name) ? "Unknown node" : lastNode.Name);
 				if (!lastNode.IsOnline)
 				{
-					AddHealthFinding(text + " is stale.", Brushes.Goldenrod, critical: false);
+					AddHealthFinding(text + (lastNode.IsDiscovering ? " is listed but not reachable yet." : " is stale."), WarningIndicatorBrush, critical: false);
 					flag2 = true;
 				}
 				if (lastNode.GossipStale && lastNode.IsOnline)
 				{
-					AddHealthFinding(text + " topology data is stale.", Brushes.Goldenrod, critical: false);
+					AddHealthFinding(text + " topology data is stale.", WarningIndicatorBrush, critical: false);
 					flag2 = true;
 				}
 				int? num = lastNode.CurrentRssi ?? lastNode.Rssi;
 				if (num.HasValue && _previousNodeStates.TryGetValue(GetNodeSelectionKey(lastNode), out NodeStateSnapshot nodeState) && nodeState.RssiPoor)
 				{
-					AddHealthFinding(text + " RSSI is weak at " + num.Value.ToString(CultureInfo.InvariantCulture) + " dBm.", Brushes.Goldenrod, critical: false);
+					AddHealthFinding(text + " RSSI is weak at " + num.Value.ToString(CultureInfo.InvariantCulture) + " dBm.", WarningIndicatorBrush, critical: false);
 					flag2 = true;
 				}
 			}
 			if (_meshInterfaceAvailable.HasValue && !_meshInterfaceAvailable.Value)
 			{
-				AddHealthFinding("The HaLow mesh interface is unavailable.", Brushes.Tomato, critical: true);
+				AddHealthFinding("The HaLow mesh interface is unavailable.", DangerIndicatorBrush, critical: true);
 				flag = true;
 			}
 			if (_currentBandwidthMbps.HasValue && _bandwidthIsLow == true)
 			{
-				AddHealthFinding("Mesh bandwidth is low at " + _currentBandwidthMbps.Value.ToString("0.00", CultureInfo.InvariantCulture) + " Mbps.", Brushes.Goldenrod, critical: false);
+				AddHealthFinding("Mesh bandwidth is low at " + _currentBandwidthMbps.Value.ToString("0.00", CultureInfo.InvariantCulture) + " Mbps.", WarningIndicatorBrush, critical: false);
 				flag2 = true;
 			}
 			if (_currentUtilizationPercent.HasValue && (_utilizationState == "Warning" || _utilizationState == "Critical"))
 			{
 				bool flag3 = _utilizationState == "Critical";
-				AddHealthFinding("Estimated mesh utilization is " + _currentUtilizationPercent.Value.ToString("0.0", CultureInfo.InvariantCulture) + "%.", flag3 ? Brushes.Tomato : Brushes.Goldenrod, flag3);
+				AddHealthFinding("Estimated mesh utilization is " + _currentUtilizationPercent.Value.ToString("0.0", CultureInfo.InvariantCulture) + "%.", flag3 ? DangerIndicatorBrush : WarningIndicatorBrush, flag3);
 				flag2 = true;
 			}
 			OpenMANET_SystemInfo lastSystemDetails = _client.LastSystemDetails;
@@ -1186,29 +1211,29 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			{
 				if (systemState.HighCpu)
 				{
-					AddHealthFinding("Gateway CPU load is " + lastSystemDetails.CpuLoadValue.ToString("0.0", CultureInfo.InvariantCulture) + "%.", Brushes.Goldenrod, critical: false);
+					AddHealthFinding("Gateway CPU load is " + lastSystemDetails.CpuLoadValue.ToString("0.0", CultureInfo.InvariantCulture) + "%.", WarningIndicatorBrush, critical: false);
 					flag2 = true;
 				}
 				if (systemState.HighMemory)
 				{
-					AddHealthFinding("Gateway memory usage is " + lastSystemDetails.MemoryUsagePercent.ToString("0.0", CultureInfo.InvariantCulture) + "%.", Brushes.Goldenrod, critical: false);
+					AddHealthFinding("Gateway memory usage is " + lastSystemDetails.MemoryUsagePercent.ToString("0.0", CultureInfo.InvariantCulture) + "%.", WarningIndicatorBrush, critical: false);
 					flag2 = true;
 				}
 				if (systemState.HighStorage)
 				{
-					AddHealthFinding("Gateway storage usage is " + lastSystemDetails.OverlayUsagePercent.ToString("0.0", CultureInfo.InvariantCulture) + "%.", Brushes.Goldenrod, critical: false);
+					AddHealthFinding("Gateway storage usage is " + lastSystemDetails.OverlayUsagePercent.ToString("0.0", CultureInfo.InvariantCulture) + "%.", WarningIndicatorBrush, critical: false);
 					flag2 = true;
 				}
 				if (systemState.HighTemperature)
 				{
-					AddHealthFinding("Gateway CPU temperature is " + lastSystemDetails.CpuTemperatureCelsius.ToString("0.0", CultureInfo.InvariantCulture) + " °C.", Brushes.Goldenrod, critical: false);
+					AddHealthFinding("Gateway CPU temperature is " + lastSystemDetails.CpuTemperatureCelsius.ToString("0.0", CultureInfo.InvariantCulture) + " °C.", WarningIndicatorBrush, critical: false);
 					flag2 = true;
 				}
 			}
 		}
 		if (_healthFindings.Count == 0)
 		{
-			AddHealthFinding("No active health findings.", Brushes.LimeGreen, critical: false);
+			AddHealthFinding("No active health findings.", SuccessIndicatorBrush, critical: false);
 		}
 		TextBlock healthSummaryText = HealthSummaryText;
 		string text2;
@@ -1225,11 +1250,11 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		SolidColorBrush foreground;
 		if (flag)
 		{
-			foreground = Brushes.Tomato;
+			foreground = DangerIndicatorBrush;
 		}
 		else
 		{
-			foreground = (flag2 ? Brushes.Goldenrod : Brushes.LimeGreen);
+			foreground = (flag2 ? WarningIndicatorBrush : SuccessIndicatorBrush);
 		}
 		healthSummaryText2.Foreground = foreground;
 	}
@@ -1586,11 +1611,11 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				Brush stroke;
 				if (edge.IsOnMyPath)
 				{
-					stroke = new SolidColorBrush(Color.FromRgb(73, 209, 125));
+					stroke = SuccessIndicatorBrush;
 				}
 				else
 				{
-					stroke = (edge.IsBlos ? new SolidColorBrush(Color.FromRgb(225, 174, 78)) : new SolidColorBrush(Color.FromRgb(98, 107, 117)));
+					stroke = (edge.IsBlos ? WarningIndicatorBrush : CreateFrozenBrush(0x4A, 0x52, 0x62));
 				}
 				Line line = new Line();
 				line.X1 = num8;
@@ -1630,24 +1655,24 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		Brush brush;
 		if (node.GossipStale)
 		{
-			brush = new SolidColorBrush(Color.FromRgb(121, 124, 130));
+			brush = CreateFrozenBrush(0x6B, 0x72, 0x80);
 		}
 		else if (node.IsSelf)
 		{
-			brush = new SolidColorBrush(Color.FromRgb(73, 209, 125));
+			brush = SuccessIndicatorBrush;
 		}
 		else
 		{
-			brush = (node.IsGateway ? new SolidColorBrush(Color.FromRgb(67, 199, 183)) : new SolidColorBrush(Color.FromRgb(89, 97, 106)));
+			brush = (node.IsGateway ? CreateFrozenBrush(0x2D, 0xD4, 0xBF) : CreateFrozenBrush(0x5B, 0x64, 0x75));
 		}
 		Brush borderBrush;
 		if (isSelected)
 		{
-			borderBrush = new SolidColorBrush(Color.FromRgb(214, 166, 74));
+			borderBrush = CreateFrozenBrush(0x4C, 0x9A, 0xFF);
 		}
 		else
 		{
-			borderBrush = (node.GossipStale ? new SolidColorBrush(Color.FromRgb(121, 124, 130)) : new SolidColorBrush(Color.FromRgb(64, 68, 73)));
+			borderBrush = (node.GossipStale ? CreateFrozenBrush(0x6B, 0x72, 0x80) : CreateFrozenBrush(0x2A, 0x2F, 0x3A));
 		}
 		Grid grid = new Grid();
 		grid.ColumnDefinitions.Add(new ColumnDefinition
@@ -1705,7 +1730,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			Text = node.RoleDisplay + " · " + node.HopsDisplay,
 			Margin = new Thickness(8.0, 5.0, 0.0, 0.0),
 			FontSize = 9.0,
-			Foreground = new SolidColorBrush(Color.FromRgb(177, 179, 183)),
+			Foreground = CreateFrozenBrush(0xA3, 0xA9, 0xB5),
 			TextTrimming = TextTrimming.CharacterEllipsis
 		};
 		Grid.SetRow(element4, 1);
@@ -1716,7 +1741,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		border.Width = width;
 		border.Height = height;
 		border.Padding = new Thickness(8.0);
-		border.Background = new SolidColorBrush(Color.FromRgb(35, 37, 40));
+		border.Background = CreateFrozenBrush(0x1E, 0x22, 0x2A);
 		border.BorderBrush = borderBrush;
 		border.BorderThickness = new Thickness(isSelected ? 2.0 : 1.0);
 		border.CornerRadius = new CornerRadius(8.0);
@@ -1860,11 +1885,16 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			stringBuilder.AppendLine("Interfaces:");
 			foreach (OpenMANET_NetworkSummaryInfo networkEntry in lastSystemDetails.NetworkEntries)
 			{
-				stringBuilder.AppendLine("- " + (includeOperationalIdentifiers ? DiagnosticText(networkEntry.NameDisplay, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : openMANET_DiagnosticRedactor.Alias(networkEntry.NameDisplay, "Interface")) + (includeOperationalIdentifiers ? (" (" + DiagnosticText(networkEntry.InterfaceDisplay, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) + ")") : string.Empty) + " | " + networkEntry.StateDisplay + " | " + networkEntry.TrafficDisplay);
+				stringBuilder.AppendLine("- " + (includeOperationalIdentifiers ? DiagnosticText(networkEntry.NameDisplay, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : openMANET_DiagnosticRedactor.Alias(networkEntry.NameDisplay, "Interface")) + ((includeOperationalIdentifiers && (networkEntry.NameDisplay ?? string.Empty).IndexOf("(" + networkEntry.InterfaceDisplay + ")", StringComparison.OrdinalIgnoreCase) < 0) ? (" (" + DiagnosticText(networkEntry.InterfaceDisplay, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) + ")") : string.Empty) +" | " + networkEntry.StateDisplay + " | " + networkEntry.TrafficDisplay);
 			}
 			if (includeOperationalIdentifiers)
 			{
 				stringBuilder.AppendLine("Services:");
+				if (lastSystemDetails.Services.Count > 0 && lastSystemDetails.StoppedServiceCount == lastSystemDetails.Services.Count)
+				{
+					// The node is answering API calls, so openmanetd cannot really be stopped.
+					stringBuilder.AppendLine("  Note: the node reports every service stopped while answering API calls; its service status is likely unreliable.");
+				}
 				foreach (OpenMANET_ServiceInfo service in lastSystemDetails.Services)
 				{
 					stringBuilder.AppendLine("- " + service.NameDisplay + " | " + service.StatusDisplay + " | " + service.ProcessDisplay);
@@ -1970,7 +2000,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		else
 		{
 			ConnectionStatusText.Text = "Not Connected";
-			ConnectionStatusIndicator.Fill = Brushes.Red;
+			ConnectionStatusIndicator.Fill = DangerIndicatorBrush;
 		}
 	}
 
@@ -1982,7 +2012,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			return;
 		}
 		string text;
-		SolidColorBrush fill = Brushes.Goldenrod;
+		SolidColorBrush fill = WarningIndicatorBrush;
 		if (_refreshFailureActive)
 		{
 			text = "Connected - polling delayed";
@@ -1998,7 +2028,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		else
 		{
 			text = "Connected";
-			fill = Brushes.LimeGreen;
+			fill = SuccessIndicatorBrush;
 		}
 		ConnectionStatusText.Text = text;
 		ConnectionStatusIndicator.Fill = fill;
@@ -2030,6 +2060,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		LinkQualityNodeComboBox.SelectedItem = null;
 		GatewayStatusText.Text = "Not Connected";
 		NodeCountText.Text = "0";
+		NodeTotalText.Text = "of 0";
 		LastPollText.Text = "Never";
 		ClearNodeDetails();
 		ClearTopology();
@@ -2069,7 +2100,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			AddMeshEvent("WARNING", "OpenMANET authentication expired or was rejected. Reconnect to continue monitoring.");
 			MainTabControl.SelectedIndex = 4;
 			ConnectionStatusText.Text = "Authentication expired - reconnect";
-			ConnectionStatusIndicator.Fill = Brushes.Goldenrod;
+			ConnectionStatusIndicator.Fill = WarningIndicatorBrush;
 		}
 	}
 
