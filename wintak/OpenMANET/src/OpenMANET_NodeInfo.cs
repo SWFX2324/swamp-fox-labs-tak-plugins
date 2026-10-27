@@ -90,6 +90,28 @@ internal sealed class OpenMANET_NodeInfo
 
 	public bool HasDirectLinkMetrics { get; set; }
 
+	/// <summary>Last announced WGS-84 position; null when the node has no GPS fix.</summary>
+	public double? Latitude { get; set; }
+
+	public double? Longitude { get; set; }
+
+	/// <summary>Meters above mean sea level, as reported by the node.</summary>
+	public double? Altitude { get; set; }
+
+	public bool HasPosition => Latitude.HasValue && Longitude.HasValue;
+
+	public string PositionDisplay
+	{
+		get
+		{
+			if (!HasPosition)
+			{
+				return "No GPS fix";
+			}
+			return Latitude.Value.ToString("0.00000", System.Globalization.CultureInfo.InvariantCulture) + ", " + Longitude.Value.ToString("0.00000", System.Globalization.CultureInfo.InvariantCulture);
+		}
+	}
+
 	public string RoleDisplay
 	{
 		get

@@ -1,6 +1,7 @@
 using System.ComponentModel.Composition;
 using Prism.Mef.Modularity;
 using Prism.Modularity;
+using WinTak.CursorOnTarget.Services;
 using WinTak.Framework.Messaging;
 using WinTak.Framework.Notifications;
 
@@ -17,8 +18,11 @@ internal sealed class OpenMANET_Module : IModule
 	[Import(AllowDefault = true)]
 	private INotificationLog NotificationLog { get; set; }
 
+	[Import(AllowDefault = true)]
+	private ICotMessageSender CotSender { get; set; }
+
 	public void Initialize()
 	{
-		OpenMANET_PluginHost.Initialize(MessageHub, NotificationLog);
+		OpenMANET_PluginHost.Initialize(MessageHub, NotificationLog, CotSender);
 	}
 }

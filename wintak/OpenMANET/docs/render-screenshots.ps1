@@ -13,7 +13,7 @@ param(
 # Renders README screenshots of the OpenMANET pane with sample (fictional) mesh data.
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
-foreach ($dep in "WinTak.Framework.dll", "Prism.dll", "Prism.Wpf.dll", "Prism.Mef.Wpf.dll") {
+foreach ($dep in "WinTak.Framework.dll", "Prism.dll", "Prism.Wpf.dll", "Prism.Mef.Wpf.dll", "WinTak.Common.dll", "WinTak.Graphics.dll", "WinTak.CursorOnTarget.dll") {
     [System.Reflection.Assembly]::LoadFrom((Join-Path $WinTakDir $dep)) | Out-Null
 }
 $asm = [System.Reflection.Assembly]::LoadFrom($Dll)
@@ -48,8 +48,8 @@ function ToInt([int]$v) { [Nullable[int]]$v }
 $nodeType = $asm.GetType($ns + "OpenMANET_NodeInfo")
 $nodes = [Activator]::CreateInstance([System.Collections.Generic.List``1].MakeGenericType($nodeType))
 $common = { param($h) $h["LastSuccessfulPollUtc"] = [Nullable[DateTimeOffset]]$now; $h }
-$nodes.Add((New-Obj "OpenMANET_NodeInfo" (& $common @{ Name = "Node1"; Address = "10.41.0.2"; MacAddress = "02:00:5E:10:00:01"; IsOnline = $true; IsRouted = $true; IsSelf = $true; HopsFromSelf = (ToInt 0); RouteInterface = "wlh0"; Segment = "local"; DirectLinkCount = 2 })))
-$nodes.Add((New-Obj "OpenMANET_NodeInfo" (& $common @{ Name = "Node0"; Callsign = "BASE"; Address = "10.41.0.1"; MacAddress = "02:00:5E:10:00:00"; IsOnline = $true; IsRouted = $true; HasLiveLink = $true; IsGateway = $true; HopsFromSelf = (ToInt 1); RouteInterface = "wlh0"; Segment = "local"; Rssi = (ToInt -48); CurrentRssi = (ToInt -47); ThroughputKbps = (ToInt 32400); LinkAgeMilliseconds = [Nullable[long]]180; NeighborIdentifier = "Node0.wlh0"; LinkHardwareAddress = "02:00:5E:20:00:00"; DirectLinkCount = 1; HasDirectLinkMetrics = $true; GossipAgeSeconds = (ToInt 4) })))
+$nodes.Add((New-Obj "OpenMANET_NodeInfo" (& $common @{ Latitude = [Nullable[double]]32.77651; Longitude = [Nullable[double]](-79.93108); Name = "Node1"; Address = "10.41.0.2"; MacAddress = "02:00:5E:10:00:01"; IsOnline = $true; IsRouted = $true; IsSelf = $true; HopsFromSelf = (ToInt 0); RouteInterface = "wlh0"; Segment = "local"; DirectLinkCount = 2 })))
+$nodes.Add((New-Obj "OpenMANET_NodeInfo" (& $common @{ Latitude = [Nullable[double]]32.78012; Longitude = [Nullable[double]](-79.92503); Name = "Node0"; Callsign = "BASE"; Address = "10.41.0.1"; MacAddress = "02:00:5E:10:00:00"; IsOnline = $true; IsRouted = $true; HasLiveLink = $true; IsGateway = $true; HopsFromSelf = (ToInt 1); RouteInterface = "wlh0"; Segment = "local"; Rssi = (ToInt -48); CurrentRssi = (ToInt -47); ThroughputKbps = (ToInt 32400); LinkAgeMilliseconds = [Nullable[long]]180; NeighborIdentifier = "Node0.wlh0"; LinkHardwareAddress = "02:00:5E:20:00:00"; DirectLinkCount = 1; HasDirectLinkMetrics = $true; GossipAgeSeconds = (ToInt 4) })))
 $nodes.Add((New-Obj "OpenMANET_NodeInfo" (& $common @{ Name = "Node2"; Callsign = "RELAY 2"; Address = "10.41.0.3"; MacAddress = "02:00:5E:10:00:02"; IsOnline = $true; IsRouted = $true; HasLiveLink = $true; HopsFromSelf = (ToInt 1); RouteInterface = "wlh0"; Segment = "local"; Rssi = (ToInt -64); CurrentRssi = (ToInt -66); ThroughputKbps = (ToInt 18900); LinkAgeMilliseconds = [Nullable[long]]420; NeighborIdentifier = "Node2.wlh0"; LinkHardwareAddress = "02:00:5E:20:00:02"; DirectLinkCount = 1; HasDirectLinkMetrics = $true; GossipAgeSeconds = (ToInt 6) })))
 $nodes.Add((New-Obj "OpenMANET_NodeInfo" (& $common @{ Name = "Node3"; Address = "10.41.0.4"; MacAddress = "02:00:5E:10:00:03"; IsOnline = $true; IsRouted = $true; HopsFromSelf = (ToInt 2); RouteInterface = "wlh0"; Segment = "local"; GossipAgeSeconds = (ToInt 9) })))
 $nodes.Add((New-Obj "OpenMANET_NodeInfo" (& $common @{ Name = "Node4"; Address = "10.41.0.5"; MacAddress = "02:00:5E:10:00:04"; IsDiscovering = $true; Segment = "local" })))

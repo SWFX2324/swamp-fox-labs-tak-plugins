@@ -23,6 +23,14 @@
       <HintPath>$(WinTakDir)\WinTak.Framework.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="WinTak.CursorOnTarget">
+      <HintPath>$(WinTakDir)\WinTak.CursorOnTarget.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="WinTak.Common">
+      <HintPath>$(WinTakDir)\WinTak.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Prism">
       <HintPath>$(WinTakDir)\Prism.dll</HintPath>
       <Private>false</Private>

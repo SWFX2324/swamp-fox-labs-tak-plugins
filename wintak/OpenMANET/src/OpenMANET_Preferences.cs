@@ -6,7 +6,7 @@ using System.Text;
 
 namespace WinTAK_OpenMANET_Plugin;
 
-/// <summary>Alert and reconnect preferences, stored as key=value lines next to connection.settings.</summary>
+/// <summary>Alert, reconnect and map preferences, stored as key=value lines next to connection.settings.</summary>
 internal sealed class OpenMANET_Preferences
 {
 	private const long MaximumFileBytes = 4096;
@@ -22,6 +22,8 @@ internal sealed class OpenMANET_Preferences
 	public bool NotifyConnection { get; set; } = true;
 
 	public bool AutoReconnect { get; set; } = true;
+
+	public bool ShowOnMap { get; set; } = true;
 
 	public OpenMANET_Preferences(string filePath)
 	{
@@ -50,6 +52,7 @@ internal sealed class OpenMANET_Preferences
 			NotifyGateway = Get(values, nameof(NotifyGateway), NotifyGateway);
 			NotifyConnection = Get(values, nameof(NotifyConnection), NotifyConnection);
 			AutoReconnect = Get(values, nameof(AutoReconnect), AutoReconnect);
+			ShowOnMap = Get(values, nameof(ShowOnMap), ShowOnMap);
 		}
 		catch
 		{
@@ -70,7 +73,8 @@ internal sealed class OpenMANET_Preferences
 			Line(nameof(NotifyLinks), NotifyLinks),
 			Line(nameof(NotifyGateway), NotifyGateway),
 			Line(nameof(NotifyConnection), NotifyConnection),
-			Line(nameof(AutoReconnect), AutoReconnect)
+			Line(nameof(AutoReconnect), AutoReconnect),
+			Line(nameof(ShowOnMap), ShowOnMap)
 		}, new UTF8Encoding(false));
 	}
 

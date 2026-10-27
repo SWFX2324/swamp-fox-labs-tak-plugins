@@ -5,9 +5,12 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Security;
 using System.Runtime.ExceptionServices;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -54,6 +57,47 @@ internal sealed class OpenMANET_Client : IDisposable
 
 		[DataMember(Name = "mac")]
 		public string MacAddress { get; set; }
+
+		[DataMember(Name = "position")]
+		public NodePositionResponse Position { get; set; }
+	}
+
+	/// <summary>Last position a node announced over the mesh (openmanet.network.v1.Position).</summary>
+	[DataContract]
+	private sealed class NodePositionResponse
+	{
+		[DataMember(Name = "latitude")]
+		public double Latitude { get; set; }
+
+		[DataMember(Name = "longitude")]
+		public double Longitude { get; set; }
+
+		[DataMember(Name = "altitude")]
+		public double Altitude { get; set; }
+	}
+
+	[DataContract]
+	private sealed class GnssStatusResponse
+	{
+		[DataMember(Name = "position")]
+		public GnssPositionResponse Position { get; set; }
+	}
+
+	/// <summary>The connected node's own fix (openmanet.gnss.v1.Position).</summary>
+	[DataContract]
+	private sealed class GnssPositionResponse
+	{
+		[DataMember(Name = "fixType")]
+		public string FixType { get; set; }
+
+		[DataMember(Name = "latitude")]
+		public double Latitude { get; set; }
+
+		[DataMember(Name = "longitude")]
+		public double Longitude { get; set; }
+
+		[DataMember(Name = "altitude")]
+		public double Altitude { get; set; }
 	}
 
 	[DataContract]
@@ -357,6 +401,8 @@ internal sealed class OpenMANET_Client : IDisposable
 
 	private MeshTopology _lastTopologyResponse;
 
+	private GnssPositionResponse _selfPosition;
+
 	private List<MeshNeighborResponse> _lastNeighbors;
 
 	public bool IsConnected { get; private set; }
@@ -371,6 +417,46 @@ internal sealed class OpenMANET_Client : IDisposable
 	/// <summary>One line per radio neighbor from the last refresh, for diagnostic snapshots.</summary>
 	public IReadOnlyList<string> LastNeighborDiagnostics { get; private set; } = new List<string>();
 
+	/// <summary>
+	/// The SHA-256 fingerprint the node's certificate must match for the next login, or null to
+	/// accept any certificate Windows trusts (and record it in <see cref="ServerCertificateThumbprint"/>).
+	/// </summary>
+	public string ExpectedCertificateThumbprint { get; set; }
+
+	/// <summary>Fingerprint of the certificate the node presented on this session's last TLS handshake.</summary>
+	public string ServerCertificateThumbprint { get; private set; }
+
+	private string _rejectedCertificateThumbprint;
+
+	private bool ValidateServerCertificate(X509Certificate2 certificate, SslPolicyErrors errors, string expectedThumbprint)
+	{
+		// Pinning adds to Windows validation; it never replaces it.
+		if (errors != SslPolicyErrors.None || certificate == null)
+		{
+			return false;
+		}
+		string thumbprint = certificate.GetCertHashString(HashAlgorithmName.SHA256);
+		if (expectedThumbprint != null && !string.Equals(thumbprint, expectedThumbprint, StringComparison.OrdinalIgnoreCase))
+		{
+			_rejectedCertificateThumbprint = thumbprint;
+			return false;
+		}
+		ServerCertificateThumbprint = thumbprint;
+		return true;
+	}
+
+	private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+	{
+		try
+		{
+			return await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
+		}
+		catch (HttpRequestException) when (_rejectedCertificateThumbprint != null)
+		{
+			throw new OpenMANET_CertificateChangedException(ExpectedCertificateThumbprint, _rejectedCertificateThumbprint);
+		}
+	}
+
 	public async Task LoginAsync(string host, int port, string username, string password, bool allowInsecureHttp, CancellationToken cancellationToken)
 	{
 		Uri uri = OpenMANET_Security.BuildEndpoint(host, port, allowInsecureHttp);
@@ -382,13 +468,16 @@ internal sealed class OpenMANET_Client : IDisposable
 		OpenMANET_Security.ValidatePassword(password);
 		Disconnect();
 		_usesSecureFrontend = !allowInsecureHttp;
+		string expectedThumbprint = allowInsecureHttp ? null : OpenMANET_CertificatePinStore.NormalizeThumbprint(ExpectedCertificateThumbprint);
 		HttpClientHandler handler = new HttpClientHandler
 		{
 			AllowAutoRedirect = false,
 			UseCookies = false,
 			UseProxy = false,
 			// Refresh issues four RPCs at once while the 5 s link sampler may also be in flight.
-			MaxConnectionsPerServer = 4
+			MaxConnectionsPerServer = 4,
+			// Runs on every TLS handshake for this session, not just the login.
+			ServerCertificateCustomValidationCallback = (HttpRequestMessage message, X509Certificate2 certificate, X509Chain chain, SslPolicyErrors errors) => ValidateServerCertificate(certificate, errors, expectedThumbprint)
 		};
 		_sessionCancellation = new CancellationTokenSource();
 		_httpClient = new HttpClient(handler)
@@ -406,7 +495,7 @@ internal sealed class OpenMANET_Client : IDisposable
 		using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, "auth/login");
 		request.Content = new StringContent(content, Encoding.UTF8, "application/json");
 		using CancellationTokenSource requestCancellation = CreateRequestCancellation(cancellationToken);
-		using HttpResponseMessage response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestCancellation.Token).ConfigureAwait(continueOnCapturedContext: false);
+		using HttpResponseMessage response = await SendAsync(request, requestCancellation.Token).ConfigureAwait(continueOnCapturedContext: false);
 		if (!response.IsSuccessStatusCode)
 		{
 			throw CreateHttpException("Authentication failed", response);
@@ -430,9 +519,10 @@ internal sealed class OpenMANET_Client : IDisposable
 		Task<MeshTopologyResponse> topologyTask = PostAsync<MeshTopologyResponse>("openmanet.mesh_topology.v1.MeshTopologyService/GetMeshTopology", "Unable to retrieve OpenMANET topology", refreshCancellation.Token);
 		Task<ListMeshNeighborsResponse> neighborsTask = PostAsync<ListMeshNeighborsResponse>("openmanet.service.v1.MeshNeighborService/ListMeshNeighbors", "Unable to retrieve OpenMANET link quality", refreshCancellation.Token);
 		Task<DashboardStatusResponse> dashboardTask = PostAsync<DashboardStatusResponse>("openmanet.dashboard.v1.DashboardService/GetDashboardStatus", "Unable to retrieve OpenMANET system details", refreshCancellation.Token);
+		Task<GnssStatusResponse> gnssTask = PostAsync<GnssStatusResponse>("openmanet.gnss.v1.GNSSService/GetGNSSStatus", "Unable to retrieve OpenMANET GNSS status", refreshCancellation.Token);
 		try
 		{
-			await Task.WhenAll(nodesTask, topologyTask, neighborsTask, dashboardTask).ConfigureAwait(continueOnCapturedContext: false);
+			await Task.WhenAll(nodesTask, topologyTask, neighborsTask, dashboardTask, gnssTask).ConfigureAwait(continueOnCapturedContext: false);
 		}
 		catch
 		{
@@ -482,6 +572,10 @@ internal sealed class OpenMANET_Client : IDisposable
 			failures["System status"] = OpenMANET_Security.OperatorMessage(dashboardFailure);
 		}
 		LastRefreshFailures = failures;
+		// GNSS only places the local node on the map. Firmware without the service, or a node
+		// without a fix, simply leaves it off rather than reporting partial data.
+		GnssPositionResponse gnssPosition = (gnssTask.Status == TaskStatus.RanToCompletion) ? gnssTask.Result?.Position : null;
+		_selfPosition = (gnssPosition != null && (gnssPosition.FixType == "FIX_TYPE_2D" || gnssPosition.FixType == "FIX_TYPE_3D")) ? gnssPosition : null;
 		ListNodesResponse knownNodes = _lastKnownNodes;
 		MeshTopology topology = _lastTopologyResponse;
 		List<MeshNeighborResponse> list = _lastNeighbors ?? new List<MeshNeighborResponse>();
@@ -607,7 +701,10 @@ internal sealed class OpenMANET_Client : IDisposable
 					NeighborIdentifier = meshNeighborResponse?.Neighbor,
 					LinkHardwareAddress = meshNeighborResponse?.HardwareAddress,
 					DirectLinkCount = ((value != null && value.IsSelf) ? list.Count : list3.Count),
-					HasDirectLinkMetrics = (meshNeighborResponse != null)
+					HasDirectLinkMetrics = (meshNeighborResponse != null),
+					Latitude = node3.Position?.Latitude,
+					Longitude = node3.Position?.Longitude,
+					Altitude = node3.Position?.Altitude
 				});
 			}
 		}
@@ -683,6 +780,9 @@ internal sealed class OpenMANET_Client : IDisposable
 		_lastKnownNodes = null;
 		_lastTopologyResponse = null;
 		_lastNeighbors = null;
+		_selfPosition = null;
+		ServerCertificateThumbprint = null;
+		_rejectedCertificateThumbprint = null;
 		_lastSeenByNode.Clear();
 		_everOnlineNodes.Clear();
 		_directNeighborNodes.Clear();
@@ -742,7 +842,7 @@ internal sealed class OpenMANET_Client : IDisposable
 		request.Headers.Add("Connect-Protocol-Version", "1");
 		request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
 		using CancellationTokenSource requestCancellation = CreateRequestCancellation(cancellationToken);
-		using HttpResponseMessage response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestCancellation.Token).ConfigureAwait(continueOnCapturedContext: false);
+		using HttpResponseMessage response = await SendAsync(request, requestCancellation.Token).ConfigureAwait(continueOnCapturedContext: false);
 		if (!response.IsSuccessStatusCode)
 		{
 			throw CreateHttpException(errorMessage, response);
@@ -772,7 +872,7 @@ internal sealed class OpenMANET_Client : IDisposable
 			return null;
 		}
 		Exception exception = task.Exception?.GetBaseException() ?? new OperationCanceledException("The OpenMANET request was cancelled.");
-		if (exception is OpenMANET_AuthenticationException || cancellationToken.IsCancellationRequested || sessionToken.IsCancellationRequested)
+		if (exception is OpenMANET_AuthenticationException || exception is OpenMANET_CertificateChangedException || cancellationToken.IsCancellationRequested || sessionToken.IsCancellationRequested)
 		{
 			ExceptionDispatchInfo.Capture(exception).Throw();
 		}
@@ -838,7 +938,10 @@ internal sealed class OpenMANET_Client : IDisposable
 			RouteInterface = self?.MyHardInterfaceName,
 			GossipAgeSeconds = 0,
 			LastSuccessfulPollUtc = utcNow,
-			DirectLinkCount = neighborCount
+			DirectLinkCount = neighborCount,
+			Latitude = _selfPosition?.Latitude,
+			Longitude = _selfPosition?.Longitude,
+			Altitude = _selfPosition?.Altitude
 		};
 	}
 
@@ -1269,6 +1372,23 @@ internal sealed class OpenMANET_Client : IDisposable
 		return result;
 	}
 
+	/// <summary>
+	/// True for a finite WGS-84 position. 0,0 is treated as "no fix", which is what nodes without
+	/// GPS announce, since a real node in the Gulf of Guinea is far less likely than missing data.
+	/// </summary>
+	private static bool IsUsablePosition(double latitude, double longitude, double altitude)
+	{
+		if (!OpenMANET_Security.IsFinite(latitude) || !OpenMANET_Security.IsFinite(longitude) || !OpenMANET_Security.IsFinite(altitude))
+		{
+			return false;
+		}
+		if (latitude < -90.0 || latitude > 90.0 || longitude < -180.0 || longitude > 180.0)
+		{
+			return false;
+		}
+		return Math.Abs(latitude) > 1E-07 || Math.Abs(longitude) > 1E-07;
+	}
+
 	private static void ValidateAndNormalizeResponse<T>(T response)
 	{
 		if (response is ListNodesResponse listNodesResponse)
@@ -1286,10 +1406,24 @@ internal sealed class OpenMANET_Client : IDisposable
 						node.Hostname = NormalizeIdentifier(node.Hostname, "node hostname");
 						node.IpAddress = NormalizeIdentifier(node.IpAddress, "node IP address", 64);
 						node.MacAddress = NormalizeIdentifier(node.MacAddress, "node MAC address", 64);
+						// A missing or out-of-range position is dropped rather than failing the refresh.
+						if (node.Position != null && !IsUsablePosition(node.Position.Latitude, node.Position.Longitude, node.Position.Altitude))
+						{
+							node.Position = null;
+						}
 					}
 				}
 				return;
 			}
+		}
+		if (response is GnssStatusResponse gnssStatusResponse)
+		{
+			GnssPositionResponse position = gnssStatusResponse.Position;
+			if (position != null && !IsUsablePosition(position.Latitude, position.Longitude, position.Altitude))
+			{
+				gnssStatusResponse.Position = null;
+			}
+			return;
 		}
 		if (response is ListMeshNeighborsResponse listMeshNeighborsResponse)
 		{

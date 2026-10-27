@@ -6,7 +6,7 @@ Security fixes go into the latest release only. Please update to the newest vers
 
 | Plugin | Supported | Not supported |
 | --- | --- | --- |
-| OpenMANET for WinTAK | 2.0.8.x (latest) | Anything older |
+| OpenMANET for WinTAK | 2.1.x (latest) | Anything older |
 
 ## Reporting a vulnerability
 
@@ -35,6 +35,8 @@ Out of scope, so please report these to their own maintainers:
 
 **Network**
 - Connects over **HTTPS by default**, using normal Windows certificate validation. The node's certificate must be trusted by Windows; there is no option to skip validation.
+- **Certificate pinning:** on the first HTTPS connect to a gateway, the plugin records the SHA-256 fingerprint of its certificate. Every later TLS handshake must present that same certificate in addition to passing Windows validation. If it changes, the connection is blocked and both fingerprints are shown; the new certificate is trusted only if you confirm it. Automatic reconnect never accepts a changed certificate, and a change mid-session disconnects immediately. Pins can be cleared under Settings → Forget Certificate.
+- **Map items** for mesh nodes and links are processed locally by WinTAK only. They're never sent to a TAK server or other clients, and they aren't archived; they're removed on disconnect and when WinTAK closes.
 - **Legacy HTTP** (port 8087) is off by default. Enabling it takes an explicit checkbox plus a confirmation warning, and it only connects to private or local network addresses.
 - Doesn't follow redirects, use cookies, or go through a system proxy. The gateway address must be a plain hostname or IP address, with no paths or embedded credentials.
 - Response sizes, item counts and request times are capped, and data from the node is validated before it's shown.
@@ -43,7 +45,7 @@ Out of scope, so please report these to their own maintainers:
 - The **password is never written to disk**. It's cleared from the form as soon as you connect.
 - With **automatic reconnect** on (the default), the password is kept in memory while you're connected, encrypted with Windows DPAPI for your Windows account, so the plugin can sign back in after a node reboot. It's wiped when you disconnect, turn the option off, the node rejects it, or WinTAK closes. Turn automatic reconnect off in Settings to keep no copy at all.
 - The session token is kept in memory only. On disconnect and when WinTAK shuts down, the plugin asks the node to sign the session out.
-- Saved on disk, in `%APPDATA%\WinTAK\Plugins\WinTAK_OpenMANET_Plugin\` in plain text: the gateway address, port and username (`connection.settings`), any callsigns you assign (`callsigns.settings`), and your alert and reconnect choices (`preferences.settings`). Nothing secret is saved there.
+- Saved on disk, in `%APPDATA%\WinTAK\Plugins\WinTAK_OpenMANET_Plugin\` in plain text: the gateway address, port and username (`connection.settings`), any callsigns you assign (`callsigns.settings`), your alert, reconnect and map choices (`preferences.settings`), and pinned certificate fingerprints (`trusted-certificates.settings`). Nothing secret is saved there.
 - WinTAK notifications carry the same text as the plugin's event log (node names, status and error messages, never credentials). The plugin removes its notifications from WinTAK's saved notification list when WinTAK closes.
 
 **Diagnostics**
@@ -52,5 +54,5 @@ Out of scope, so please report these to their own maintainers:
 - The **full operational snapshot** contains real network details. Treat it as sensitive.
 
 **Known limitations**
-- Legacy HTTP mode sends the username, password, session token and telemetry unencrypted. Use it only on a network you trust.
-- The plugin relies on Windows to trust the node's HTTPS certificate. It doesn't pin certificates yet.
+- Legacy HTTP mode sends the username, password, session token and telemetry unencrypted, and has no certificate to pin. Use it only on a network you trust.
+- Pinning is trust on first use: it protects every connection after the first, so make the first connection on a network you trust.

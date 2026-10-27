@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using WinTak.CursorOnTarget.Services;
 using WinTak.Framework.Messaging;
 using WinTak.Framework.Notifications;
 using WinTak.Framework.Notifications.Messages;
@@ -26,14 +27,18 @@ internal static class OpenMANET_PluginHost
 
 	private static INotificationLog _notificationLog;
 
+	// Processes Cursor-on-Target locally; used to draw the mesh on the map.
+	public static ICotMessageSender CotSender { get; private set; }
+
 	public static OpenMANET_MeshHealth Health { get; private set; }
 
 	public static event EventHandler HealthChanged;
 
-	public static void Initialize(IMessageHub messageHub, INotificationLog notificationLog)
+	public static void Initialize(IMessageHub messageHub, INotificationLog notificationLog, ICotMessageSender cotSender)
 	{
 		_messageHub = messageHub;
 		_notificationLog = notificationLog;
+		CotSender = cotSender;
 	}
 
 	public static void SetHealth(OpenMANET_MeshHealth health)

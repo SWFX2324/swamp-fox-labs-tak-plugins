@@ -9,6 +9,8 @@ A WinTAK plugin for monitoring an OpenMANET HaLow mesh from a WinTAK client. It 
 - **Nodes:** per-node link quality, RSSI, routing details, 60-minute trends, and optional vanity callsigns. Callsigns are saved locally and shown in place of hostnames; export and import them as CSV to share with your team.
 - **System:** health findings, CPU, memory, storage and temperature, and network interfaces on the connected node.
 - **Alerts:** WinTAK notifications when nodes go stale or come back, links weaken, gateway health changes, or the connection drops. Pick which in Settings. The OpenMANET toolbar icon shows a green, amber or red health dot, so you can see the mesh state with the pane closed.
+- **Map:** nodes with a GPS fix appear on the WinTAK map as radio markers labeled with their callsigns, joined by link lines colored by quality (green, amber, red; BLOS dashed orange). The map items are drawn locally only and never sent to your TAK server. Turn them off under Settings → Map.
+- **Certificate pinning:** the node's HTTPS certificate is remembered on first connect. If it ever changes, the plugin blocks the connection and shows both fingerprints before trusting the new one.
 - **Auto-reconnect:** after a node reboot or an expired session, the plugin signs back in on its own, waiting a little longer between each attempt. It stops if the password is rejected.
 - **Diagnostics:** redacted or full snapshots for troubleshooting. Credentials are never included.
 
@@ -56,7 +58,8 @@ Full notes and downloads are on the [Releases](https://github.com/SWFX2324/swamp
 
 | Version | Highlights |
 | --- | --- |
-| **2.0.8.0** | WinTAK notifications for node, link, gateway and connection events; a health dot on the toolbar icon; automatic reconnect after node reboots; callsign export/import. |
+| **2.1.0.0** | Mesh nodes and quality-colored links on the WinTAK map from each node's GPS; HTTPS certificate pinning with change detection; GPS position in node details. |
+| 2.0.8.0 | WinTAK notifications for node, link, gateway and connection events; a health dot on the toolbar icon; automatic reconnect after node reboots; callsign export/import. |
 | 2.0.7.2 | New UI; Online as soon as a direct RF link is live; Discovering state; powered-off nodes go Stale in about 30 s; vanity callsigns; the connected node is listed. |
 | 2.0.5.0 | Monitoring continues with the pane closed; 15-second polling, where one failed request no longer blanks the rest; steadier threshold warnings. |
 

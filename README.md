@@ -6,7 +6,7 @@ Plugins for the TAK (Team Awareness Kit) ecosystem from Swamp Fox Labs.
 
 | Plugin | Platform | Latest | What it does |
 | --- | --- | --- | --- |
-| [OpenMANET](wintak/OpenMANET) | WinTAK 5.7.0.144 (x64) | [![Latest release](https://img.shields.io/github/v/release/SWFX2324/swamp-fox-labs-tak-plugins?label=&color=4C9AFF)](https://github.com/SWFX2324/swamp-fox-labs-tak-plugins/releases/latest) | Monitors an OpenMANET HaLow mesh from inside WinTAK: node status, link quality, live topology, gateway health, mesh events, WinTAK alerts and automatic reconnect. |
+| [OpenMANET](wintak/OpenMANET) | WinTAK 5.7.0.144 (x64) | [![Latest release](https://img.shields.io/github/v/release/SWFX2324/swamp-fox-labs-tak-plugins?label=&color=4C9AFF)](https://github.com/SWFX2324/swamp-fox-labs-tak-plugins/releases/latest) | Monitors an OpenMANET HaLow mesh from inside WinTAK: node status, link quality, live topology, mesh nodes on the map, gateway health, WinTAK alerts and automatic reconnect. |
 
 ### OpenMANET for WinTAK
 
@@ -18,6 +18,7 @@ A docked WinTAK pane for operators running an OpenMANET mesh:
 - **Topology:** a live map of nodes and links from the connected node, including BLOS links.
 - **Nodes:** per-node RSSI, link quality, routing, 60-minute trends, and optional vanity callsigns.
 - **System:** health findings, CPU, memory, storage, temperature and interfaces on the connected node.
+- **Map:** mesh nodes and quality-colored links on the WinTAK map, from each node's GPS.
 - **Alerts:** WinTAK notifications for node, link, gateway and connection changes, a health dot on the toolbar icon, and automatic reconnect.
 - **Diagnostics:** redacted or full snapshots for troubleshooting. Credentials are never included.
 

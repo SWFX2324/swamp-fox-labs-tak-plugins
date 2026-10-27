@@ -219,6 +219,10 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 	private readonly OpenMANET_Preferences _preferences;
 
+	private readonly OpenMANET_MapLayer _mapLayer = new OpenMANET_MapLayer();
+
+	private readonly OpenMANET_CertificatePinStore _certificatePins;
+
 	// Password for automatic reconnect, encrypted with DPAPI for the current Windows user and held
 	// only in memory while connected with auto-reconnect on. Never written to disk.
 	private byte[] _protectedPassword;
@@ -312,6 +316,8 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			_callsigns.Load();
 			_preferences = new OpenMANET_Preferences(System.IO.Path.Combine(path, "preferences.settings"));
 			_preferences.Load();
+			_certificatePins = new OpenMANET_CertificatePinStore(System.IO.Path.Combine(path, "trusted-certificates.settings"));
+			_certificatePins.Load();
 			LoadConnectionSettings();
 			ConnectButton.Click += ConnectButton_Click;
 			RefreshButton.Click += RefreshButton_Click;
@@ -331,7 +337,11 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			ExportCallsignsButton.Click += ExportCallsignsButton_Click;
 			ImportCallsignsButton.Click += ImportCallsignsButton_Click;
 			LoadPreferenceControls();
-			foreach (CheckBox preferenceCheckBox in new[] { NotifyNodesCheckBox, NotifyLinksCheckBox, NotifyGatewayCheckBox, NotifyConnectionCheckBox, AutoReconnectCheckBox })
+			ForgetCertificateButton.Click += ForgetCertificateButton_Click;
+			GatewayHostTextBox.TextChanged += (sender, e) => UpdateCertificatePinText();
+			GatewayPortTextBox.TextChanged += (sender, e) => UpdateCertificatePinText();
+			UpdateCertificatePinText();
+			foreach (CheckBox preferenceCheckBox in new[] { NotifyNodesCheckBox, NotifyLinksCheckBox, NotifyGatewayCheckBox, NotifyConnectionCheckBox, AutoReconnectCheckBox, ShowOnMapCheckBox })
 			{
 				preferenceCheckBox.Checked += PreferenceCheckBox_Changed;
 				preferenceCheckBox.Unchecked += PreferenceCheckBox_Changed;
@@ -391,7 +401,14 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			ConnectButton.IsEnabled = false;
 			ConnectionStatusText.Text = "Connecting...";
 			ConnectionStatusIndicator.Fill = WarningIndicatorBrush;
-			await ConnectCoreAsync(port, password, CancellationToken.None);
+			try
+			{
+				await ConnectCoreAsync(port, password, CancellationToken.None);
+			}
+			catch (OpenMANET_CertificateChangedException changed) when (ConfirmCertificateChange(changed, port))
+			{
+				await ConnectCoreAsync(port, password, CancellationToken.None);
+			}
 			RememberPasswordForReconnect(password);
 			await FinishConnectAsync();
 		}
@@ -412,11 +429,75 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	{
 		CancelOutstandingOperations();
 		_operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-		await _client.LoginAsync(GatewayHostTextBox.Text.Trim(), port, UsernameTextBox.Text.Trim(), password, AllowInsecureHttpCheckBox.IsChecked == true, _operationCancellation.Token);
+		string host = GatewayHostTextBox.Text.Trim();
+		bool secure = AllowInsecureHttpCheckBox.IsChecked != true;
+		_client.ExpectedCertificateThumbprint = secure ? _certificatePins.Find(host, port) : null;
+		await _client.LoginAsync(host, port, UsernameTextBox.Text.Trim(), password, !secure, _operationCancellation.Token);
+		// Trust on first use: remember this node's certificate so a later change is caught.
+		if (secure && _client.ExpectedCertificateThumbprint == null && _client.ServerCertificateThumbprint != null)
+		{
+			_certificatePins.Set(host, port, _client.ServerCertificateThumbprint);
+			AddMeshEvent("INFO", "Pinned the HTTPS certificate for " + host + ":" + port.ToString(CultureInfo.InvariantCulture) + " (SHA-256 " + OpenMANET_CertificatePinStore.Format(_client.ServerCertificateThumbprint) + ").");
+		}
+		UpdateCertificatePinText();
 		SaveConnectionSettings();
 		GatewayStatusText.Text = $"{GatewayHostTextBox.Text.Trim()}:{port}";
 		UpdateConnectionState(connected: true);
 		AddMeshEvent((AllowInsecureHttpCheckBox.IsChecked == true) ? "WARNING" : "INFO", "Connected to OpenMANET gateway " + GatewayHostTextBox.Text.Trim() + ":" + port + ((AllowInsecureHttpCheckBox.IsChecked == true) ? " using INSECURE HTTP. Credentials, the bearer token, and telemetry are not encrypted." : " using trusted HTTPS."));
+	}
+
+	/// <summary>
+	/// Asks whether to trust a node certificate that no longer matches its pin. On yes, re-pins it
+	/// so the caller can retry; on no, the connection stays blocked.
+	/// </summary>
+	private bool ConfirmCertificateChange(OpenMANET_CertificateChangedException changed, int port)
+	{
+		string host = GatewayHostTextBox.Text.Trim();
+		AddMeshEvent("CRITICAL", "The HTTPS certificate for " + host + ":" + port.ToString(CultureInfo.InvariantCulture) + " changed since it was first trusted. Connection blocked.", OpenMANET_EventCategory.Connection);
+		string message = "The HTTPS certificate presented by " + host + ":" + port.ToString(CultureInfo.InvariantCulture) + " does not match the one you trusted before.\n\n" +
+			"Trusted:  " + OpenMANET_CertificatePinStore.Format(changed.ExpectedThumbprint) + "\n" +
+			"Received: " + OpenMANET_CertificatePinStore.Format(changed.ActualThumbprint) + "\n\n" +
+			"If you reissued this node's certificate or reflashed it, this is expected. If not, someone may be intercepting the connection; choose No.\n\n" +
+			"Trust the new certificate and connect?";
+		if (MessageBox.Show(message, "OpenMANET Certificate Changed", MessageBoxButton.YesNo, MessageBoxImage.Exclamation, MessageBoxResult.No) != MessageBoxResult.Yes)
+		{
+			return false;
+		}
+		_certificatePins.Set(host, port, changed.ActualThumbprint);
+		AddMeshEvent("WARNING", "Trusted the new HTTPS certificate for " + host + ":" + port.ToString(CultureInfo.InvariantCulture) + " (SHA-256 " + OpenMANET_CertificatePinStore.Format(changed.ActualThumbprint) + ").");
+		return true;
+	}
+
+	private void UpdateCertificatePinText()
+	{
+		string pin = int.TryParse(GatewayPortTextBox.Text, out int port) ? _certificatePins.Find(GatewayHostTextBox.Text.Trim(), port) : null;
+		CertificatePinText.Text = (pin == null) ? "Certificate: not pinned yet. The node's certificate is pinned on the next HTTPS connect." : ("Pinned certificate SHA-256: " + OpenMANET_CertificatePinStore.Format(pin));
+		ForgetCertificateButton.IsEnabled = pin != null;
+	}
+
+	private void ForgetCertificateButton_Click(object sender, RoutedEventArgs e)
+	{
+		if (!int.TryParse(GatewayPortTextBox.Text, out int port))
+		{
+			return;
+		}
+		string host = GatewayHostTextBox.Text.Trim();
+		if (MessageBox.Show("Forget the pinned certificate for " + host + ":" + port.ToString(CultureInfo.InvariantCulture) + "? The next connect will trust whatever certificate Windows accepts and pin it again.", "OpenMANET", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
+		{
+			return;
+		}
+		try
+		{
+			if (_certificatePins.Remove(host, port))
+			{
+				AddMeshEvent("INFO", "Forgot the pinned HTTPS certificate for " + host + ":" + port.ToString(CultureInfo.InvariantCulture) + ".");
+			}
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+		{
+			MessageBox.Show(ex.Message, "OpenMANET", MessageBoxButton.OK, MessageBoxImage.Exclamation);
+		}
+		UpdateCertificatePinText();
 	}
 
 	/// <summary>Starts polling and takes the first samples after a successful login.</summary>
@@ -535,6 +616,13 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				StopReconnect("Automatic reconnect stopped: OpenMANET rejected the saved credentials. Sign in again from Settings.");
 				return;
 			}
+			catch (OpenMANET_CertificateChangedException)
+			{
+				// Never accept a changed certificate without the operator seeing it.
+				_client.Disconnect();
+				StopReconnect("Automatic reconnect stopped: the node's HTTPS certificate changed. Connect from Settings to review it.");
+				return;
+			}
 			catch (Exception) when (token.IsCancellationRequested)
 			{
 				return;
@@ -629,6 +717,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			UpdateOperationalEvents(_client.LastTopology, _client.LastSystemDetails);
 			CaptureNodeTrendSamples(list);
 			_lastNodes = list;
+			UpdateMapLayer();
 			if (_refreshFailureActive)
 			{
 				AddMeshEvent("INFO", "OpenMANET polling recovered.", OpenMANET_EventCategory.Connection);
@@ -671,6 +760,16 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			if (ex is OpenMANET_AuthenticationException)
 			{
 				HandleExpiredSession();
+				return;
+			}
+			if (ex is OpenMANET_CertificateChangedException)
+			{
+				// The certificate changed mid-session: stop talking to this endpoint at once.
+				ClearReconnectPassword();
+				ResetConnection();
+				AddMeshEvent("CRITICAL", "Disconnected: the node's HTTPS certificate changed during the session. Connect from Settings to review it.", OpenMANET_EventCategory.Connection);
+				MainTabControl.SelectedIndex = 4;
+				ConnectionStatusText.Text = "Certificate changed - disconnected";
 				return;
 			}
 			string text = OpenMANET_Security.OperatorMessage(ex);
@@ -1658,6 +1757,18 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		}
 	}
 
+	private void UpdateMapLayer()
+	{
+		if (_isConnected && _preferences.ShowOnMap)
+		{
+			_mapLayer.Update(_lastNodes, _lastTopology);
+		}
+		else
+		{
+			_mapLayer.Clear(synchronous: false);
+		}
+	}
+
 	private void LoadPreferenceControls()
 	{
 		NotifyNodesCheckBox.IsChecked = _preferences.NotifyNodes;
@@ -1665,6 +1776,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		NotifyGatewayCheckBox.IsChecked = _preferences.NotifyGateway;
 		NotifyConnectionCheckBox.IsChecked = _preferences.NotifyConnection;
 		AutoReconnectCheckBox.IsChecked = _preferences.AutoReconnect;
+		ShowOnMapCheckBox.IsChecked = _preferences.ShowOnMap;
 	}
 
 	private void PreferenceCheckBox_Changed(object sender, RoutedEventArgs e)
@@ -1674,6 +1786,8 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		_preferences.NotifyGateway = NotifyGatewayCheckBox.IsChecked == true;
 		_preferences.NotifyConnection = NotifyConnectionCheckBox.IsChecked == true;
 		_preferences.AutoReconnect = AutoReconnectCheckBox.IsChecked == true;
+		_preferences.ShowOnMap = ShowOnMapCheckBox.IsChecked == true;
+		UpdateMapLayer();
 		if (!_preferences.AutoReconnect)
 		{
 			// Turning it off drops the in-memory password right away.
@@ -1755,6 +1869,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			NodesListBox.Items.Refresh();
 			LinkQualityNodeComboBox.Items.Refresh();
 			RenderTopology();
+			UpdateMapLayer();
 		}
 		string summary = "Imported " + imported.ToString(CultureInfo.InvariantCulture) + ((imported == 1) ? " callsign" : " callsigns") + ((skipped > 0) ? ("; skipped " + skipped.ToString(CultureInfo.InvariantCulture) + " invalid " + ((skipped == 1) ? "line" : "lines")) : string.Empty) + ".";
 		AddMeshEvent("INFO", summary);
@@ -1828,6 +1943,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			SelectTopologyNode(selected);
 		}
 		RenderTopology();
+		UpdateMapLayer();
 	}
 
 	private static string GetNodeSelectionKey(OpenMANET_NodeInfo node)
@@ -2502,6 +2618,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		_bandwidthIsLow = null;
 		_utilizationState = null;
 		_currentUtilizationPercent = null;
+		_mapLayer.Clear(synchronous: false);
 		NodesListBox.ItemsSource = null;
 		NodesListBox.SelectedItem = null;
 		LinkQualityNodeComboBox.ItemsSource = null;
@@ -2570,6 +2687,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		_reconnectCancellation?.Cancel();
 		ClearReconnectPassword();
 		OpenMANET_PluginHost.RemoveOwnNotifications();
+		_mapLayer.Clear(synchronous: true);
 		OpenMANET_PluginHost.SetHealth(OpenMANET_MeshHealth.None);
 		// The dispatcher is going away, so the async UI path can't finish. The client never
 		// resumes on the UI thread, so a short bounded wait here can't deadlock.

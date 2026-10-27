@@ -1223,6 +1223,7 @@
                       <RowDefinition Height="Auto" />
                       <RowDefinition Height="Auto" />
                       <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Status" Style="{StaticResource LabelTextStyle}" />
                     <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource ValueTextStyle}" FontWeight="SemiBold" Text="{Binding StatusDisplay}" />
@@ -1246,6 +1247,8 @@
                     </TextBlock>
                     <TextBlock Grid.Row="5" Text="Last reachable" Style="{StaticResource LabelTextStyle}" />
                     <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource ValueTextStyle}" Text="{Binding LastPollDisplay}" />
+                    <TextBlock Grid.Row="6" Text="GPS position" Style="{StaticResource LabelTextStyle}" />
+                    <TextBlock Grid.Row="6" Grid.Column="1" Style="{StaticResource ValueTextStyle}" Text="{Binding PositionDisplay}" />
                   </Grid>
 
                   <TextBlock Text="LINK" Style="{StaticResource EyebrowTextStyle}" Margin="0,0,0,8" />
@@ -1562,6 +1565,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                   </Grid.RowDefinitions>
                   <Grid Grid.Row="0" Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
@@ -1583,6 +1587,14 @@
                   <TextBlock Grid.Row="3" Text="Password" Style="{StaticResource SecondaryTextStyle}" FontSize="11" Margin="0,0,0,5" />
                   <PasswordBox Name="PasswordInput" Grid.Row="4" />
                   <TextBlock Name="TransportModeText" Grid.Row="5" Margin="0,10,0,0" Text="Secure mode: trusted HTTPS frontend with the /auth and /rpc proxies and normal Windows certificate validation." Style="{StaticResource CaptionTextStyle}" />
+                  <Grid Grid.Row="7" Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Name="CertificatePinText" Text="Certificate: not pinned yet." Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="The node's HTTPS certificate fingerprint is remembered on first connect. If it ever changes, the plugin blocks the connection and asks before trusting the new one." />
+                    <Button Name="ForgetCertificateButton" Grid.Column="1" Height="30" Padding="10,0" FontSize="11" Content="Forget Certificate" />
+                  </Grid>
                   <CheckBox Name="AllowInsecureHttpCheckBox" Grid.Row="6" Margin="0,12,0,0" Tag="{StaticResource WarningBrush}" ToolTip="HTTP provides no transport encryption and exposes the username, password, bearer token, and telemetry to interception or modification. Enable only when HTTPS is unavailable and the management path is otherwise protected.">
                     <TextBlock Text="I understand the risk: use legacy direct HTTP (port 8087)" Foreground="{StaticResource WarningBrush}" FontSize="11.5" TextWrapping="Wrap" />
                   </CheckBox>
@@ -1622,6 +1634,20 @@
                   <TextBlock Text="Reconnect automatically when the session drops" FontSize="11.5" TextWrapping="Wrap" />
                 </CheckBox>
                 <TextBlock Text="Your password stays encrypted in memory while connected and is never saved to disk. The toolbar icon shows mesh health: green, amber or red." Style="{StaticResource CaptionTextStyle}" Margin="28,4,0,0" />
+              </StackPanel>
+            </GroupBox>
+            <GroupBox>
+              <GroupBox.Header>
+                <StackPanel>
+                  <TextBlock Text="Map" />
+                  <TextBlock Text="Mesh nodes and links on the WinTAK map, from each node's GPS" Style="{StaticResource CaptionTextStyle}" FontWeight="Normal" Margin="0,2,0,0" />
+                </StackPanel>
+              </GroupBox.Header>
+              <StackPanel>
+                <CheckBox Name="ShowOnMapCheckBox">
+                  <TextBlock Text="Show mesh nodes and links on the map" FontSize="11.5" TextWrapping="Wrap" />
+                </CheckBox>
+                <TextBlock Text="Markers use each node's callsign; links are colored by quality (green, amber, red; BLOS dashed orange). They stay on this computer and are never sent to your TAK server or other users." Style="{StaticResource CaptionTextStyle}" Margin="28,4,0,0" />
               </StackPanel>
             </GroupBox>
             <GroupBox>
