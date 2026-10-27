@@ -4,8 +4,10 @@ A WinTAK plugin for monitoring an OpenMANET HaLow mesh from a WinTAK client. It 
 
 - **Dashboard:** nodes online, mesh bandwidth, throughput and utilization, plus the node list and a mesh event log.
 - **Topology:** a live map of nodes and links from the connected node, including BLOS links.
-- **Nodes:** per-node link quality, RSSI, routing details, 60-minute trends, and optional vanity callsigns. Callsigns are saved locally and shown in place of hostnames.
+- **Nodes:** per-node link quality, RSSI, routing details, 60-minute trends, and optional vanity callsigns. Callsigns are saved locally and shown in place of hostnames; export and import them as CSV to share with your team.
 - **System:** health findings, CPU, memory, storage and temperature, and network interfaces on the connected node.
+- **Alerts:** WinTAK notifications when nodes go stale or come back, links weaken, gateway health changes, or the connection drops. Pick which in Settings. The OpenMANET toolbar icon shows a green, amber or red health dot, so you can see the mesh state with the pane closed.
+- **Auto-reconnect:** after a node reboot or an expired session, the plugin signs back in on its own, waiting a little longer between each attempt. It stops if the password is rejected.
 - **Diagnostics:** redacted or full snapshots for troubleshooting. Credentials are never included.
 
 ## Screenshots

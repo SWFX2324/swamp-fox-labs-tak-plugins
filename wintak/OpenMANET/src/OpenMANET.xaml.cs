@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -216,6 +217,16 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 	private readonly OpenMANET_CallsignStore _callsigns;
 
+	private readonly OpenMANET_Preferences _preferences;
+
+	// Password for automatic reconnect, encrypted with DPAPI for the current Windows user and held
+	// only in memory while connected with auto-reconnect on. Never written to disk.
+	private byte[] _protectedPassword;
+
+	private CancellationTokenSource _reconnectCancellation;
+
+	private bool _reconnecting;
+
 	private readonly DispatcherTimer _autoRefreshTimer;
 
 	private readonly DispatcherTimer _throughputTimer;
@@ -299,6 +310,8 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			_settingsFilePath = System.IO.Path.Combine(path, "connection.settings");
 			_callsigns = new OpenMANET_CallsignStore(System.IO.Path.Combine(path, "callsigns.settings"));
 			_callsigns.Load();
+			_preferences = new OpenMANET_Preferences(System.IO.Path.Combine(path, "preferences.settings"));
+			_preferences.Load();
 			LoadConnectionSettings();
 			ConnectButton.Click += ConnectButton_Click;
 			RefreshButton.Click += RefreshButton_Click;
@@ -315,6 +328,14 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			SaveCallsignButton.Click += SaveCallsignButton_Click;
 			ClearCallsignButton.Click += ClearCallsignButton_Click;
 			CallsignTextBox.KeyDown += CallsignTextBox_KeyDown;
+			ExportCallsignsButton.Click += ExportCallsignsButton_Click;
+			ImportCallsignsButton.Click += ImportCallsignsButton_Click;
+			LoadPreferenceControls();
+			foreach (CheckBox preferenceCheckBox in new[] { NotifyNodesCheckBox, NotifyLinksCheckBox, NotifyGatewayCheckBox, NotifyConnectionCheckBox, AutoReconnectCheckBox })
+			{
+				preferenceCheckBox.Checked += PreferenceCheckBox_Changed;
+				preferenceCheckBox.Unchecked += PreferenceCheckBox_Changed;
+			}
 			ExportDiagnosticsButton.Click += ExportDiagnosticsButton_Click;
 			ExportFullDiagnosticsButton.Click += ExportFullDiagnosticsButton_Click;
 			AllowInsecureHttpCheckBox.Checked += AllowInsecureHttpCheckBox_Changed;
@@ -335,6 +356,11 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 	private async void ConnectButton_Click(object sender, RoutedEventArgs e)
 	{
+		if (_reconnecting)
+		{
+			StopReconnect("Automatic reconnect stopped.");
+			return;
+		}
 		if (_isConnected)
 		{
 			ConnectButton.IsEnabled = false;
@@ -362,23 +388,12 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		}
 		try
 		{
-			CancelOutstandingOperations();
-			_operationCancellation = new CancellationTokenSource();
 			ConnectButton.IsEnabled = false;
 			ConnectionStatusText.Text = "Connecting...";
 			ConnectionStatusIndicator.Fill = WarningIndicatorBrush;
-			await _client.LoginAsync(GatewayHostTextBox.Text.Trim(), port, UsernameTextBox.Text.Trim(), password, AllowInsecureHttpCheckBox.IsChecked == true, _operationCancellation.Token);
-			SaveConnectionSettings();
-			GatewayStatusText.Text = $"{GatewayHostTextBox.Text.Trim()}:{port}";
-			UpdateConnectionState(connected: true);
-			AddMeshEvent((AllowInsecureHttpCheckBox.IsChecked == true) ? "WARNING" : "INFO", "Connected to OpenMANET gateway " + GatewayHostTextBox.Text.Trim() + ":" + port + ((AllowInsecureHttpCheckBox.IsChecked == true) ? " using INSECURE HTTP. Credentials, the bearer token, and telemetry are not encrypted." : " using trusted HTTPS."));
-			_autoRefreshTimer.Start();
-			await RefreshAsync();
-			ClearBandwidth("Waiting for link estimate...");
-			await SampleBandwidthAsync();
-			ClearThroughput("Collecting baseline...");
-			await SampleThroughputAsync();
-			_throughputTimer.Start();
+			await ConnectCoreAsync(port, password, CancellationToken.None);
+			RememberPasswordForReconnect(password);
+			await FinishConnectAsync();
 		}
 		catch (Exception exception)
 		{
@@ -389,6 +404,172 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		{
 			PasswordInput.Password = string.Empty;
 			ConnectButton.IsEnabled = true;
+		}
+	}
+
+	/// <summary>Logs in with the gateway settings in the form and switches the pane to connected.</summary>
+	private async Task ConnectCoreAsync(int port, string password, CancellationToken cancellationToken)
+	{
+		CancelOutstandingOperations();
+		_operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+		await _client.LoginAsync(GatewayHostTextBox.Text.Trim(), port, UsernameTextBox.Text.Trim(), password, AllowInsecureHttpCheckBox.IsChecked == true, _operationCancellation.Token);
+		SaveConnectionSettings();
+		GatewayStatusText.Text = $"{GatewayHostTextBox.Text.Trim()}:{port}";
+		UpdateConnectionState(connected: true);
+		AddMeshEvent((AllowInsecureHttpCheckBox.IsChecked == true) ? "WARNING" : "INFO", "Connected to OpenMANET gateway " + GatewayHostTextBox.Text.Trim() + ":" + port + ((AllowInsecureHttpCheckBox.IsChecked == true) ? " using INSECURE HTTP. Credentials, the bearer token, and telemetry are not encrypted." : " using trusted HTTPS."));
+	}
+
+	/// <summary>Starts polling and takes the first samples after a successful login.</summary>
+	private async Task FinishConnectAsync()
+	{
+		_autoRefreshTimer.Start();
+		await RefreshAsync();
+		ClearBandwidth("Waiting for link estimate...");
+		await SampleBandwidthAsync();
+		ClearThroughput("Collecting baseline...");
+		await SampleThroughputAsync();
+		_throughputTimer.Start();
+	}
+
+	private static readonly TimeSpan[] ReconnectDelays =
+	{
+		TimeSpan.FromSeconds(2.0),
+		TimeSpan.FromSeconds(5.0),
+		TimeSpan.FromSeconds(10.0),
+		TimeSpan.FromSeconds(20.0),
+		TimeSpan.FromSeconds(30.0),
+		TimeSpan.FromSeconds(60.0)
+	};
+
+	private static readonly byte[] PasswordEntropy = Encoding.UTF8.GetBytes("WinTAK_OpenMANET_Plugin.reconnect");
+
+	private void RememberPasswordForReconnect(string password)
+	{
+		ClearReconnectPassword();
+		if (!_preferences.AutoReconnect || string.IsNullOrEmpty(password))
+		{
+			return;
+		}
+		byte[] plain = Encoding.UTF8.GetBytes(password);
+		try
+		{
+			_protectedPassword = ProtectedData.Protect(plain, PasswordEntropy, DataProtectionScope.CurrentUser);
+		}
+		catch (CryptographicException)
+		{
+			_protectedPassword = null;
+		}
+		finally
+		{
+			Array.Clear(plain, 0, plain.Length);
+		}
+	}
+
+	private string RecallReconnectPassword()
+	{
+		if (_protectedPassword == null)
+		{
+			return null;
+		}
+		byte[] plain = ProtectedData.Unprotect(_protectedPassword, PasswordEntropy, DataProtectionScope.CurrentUser);
+		try
+		{
+			return Encoding.UTF8.GetString(plain);
+		}
+		finally
+		{
+			Array.Clear(plain, 0, plain.Length);
+		}
+	}
+
+	private void ClearReconnectPassword()
+	{
+		if (_protectedPassword != null)
+		{
+			Array.Clear(_protectedPassword, 0, _protectedPassword.Length);
+			_protectedPassword = null;
+		}
+	}
+
+	/// <summary>
+	/// Logs back in after the node rejects the session (it rebooted, or the token expired),
+	/// backing off between attempts while the node is unreachable. A rejected password stops it.
+	/// </summary>
+	private async void StartReconnect()
+	{
+		if (_reconnecting || !int.TryParse(GatewayPortTextBox.Text, out int port))
+		{
+			return;
+		}
+		_reconnecting = true;
+		_reconnectCancellation = new CancellationTokenSource();
+		CancellationToken token = _reconnectCancellation.Token;
+		UpdateConnectionState(connected: false);
+		UpdateHealthFindings();
+		int attempt = 0;
+		while (!token.IsCancellationRequested)
+		{
+			attempt++;
+			ConnectionStatusText.Text = "Reconnecting (attempt " + attempt.ToString(CultureInfo.InvariantCulture) + ")...";
+			ConnectionStatusIndicator.Fill = WarningIndicatorBrush;
+			try
+			{
+				string password = RecallReconnectPassword();
+				if (password == null)
+				{
+					StopReconnect("Automatic reconnect stopped: no saved credentials.");
+					return;
+				}
+				await ConnectCoreAsync(port, password, token);
+				_reconnecting = false;
+				_reconnectCancellation.Dispose();
+				_reconnectCancellation = null;
+				UpdateConnectionState(connected: true);
+				AddMeshEvent("INFO", "Reconnected to the OpenMANET gateway after " + attempt.ToString(CultureInfo.InvariantCulture) + ((attempt == 1) ? " attempt." : " attempts."), OpenMANET_EventCategory.Connection);
+				await FinishConnectAsync();
+				return;
+			}
+			catch (OpenMANET_AuthenticationException)
+			{
+				_client.Disconnect();
+				StopReconnect("Automatic reconnect stopped: OpenMANET rejected the saved credentials. Sign in again from Settings.");
+				return;
+			}
+			catch (Exception) when (token.IsCancellationRequested)
+			{
+				return;
+			}
+			catch (Exception)
+			{
+				_client.Disconnect();
+			}
+			try
+			{
+				await Task.Delay(ReconnectDelays[Math.Min(attempt - 1, ReconnectDelays.Length - 1)], token);
+			}
+			catch (TaskCanceledException)
+			{
+				return;
+			}
+		}
+	}
+
+	private void StopReconnect(string reason)
+	{
+		bool wasReconnecting = _reconnecting;
+		_reconnecting = false;
+		if (_reconnectCancellation != null)
+		{
+			_reconnectCancellation.Cancel();
+			_reconnectCancellation.Dispose();
+			_reconnectCancellation = null;
+		}
+		ClearReconnectPassword();
+		UpdateConnectionState(connected: false);
+		UpdateHealthFindings();
+		if (wasReconnecting && !string.IsNullOrWhiteSpace(reason))
+		{
+			AddMeshEvent("WARNING", reason, OpenMANET_EventCategory.Connection);
 		}
 	}
 
@@ -450,7 +631,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			_lastNodes = list;
 			if (_refreshFailureActive)
 			{
-				AddMeshEvent("INFO", "OpenMANET polling recovered.");
+				AddMeshEvent("INFO", "OpenMANET polling recovered.", OpenMANET_EventCategory.Connection);
 				_refreshFailureActive = false;
 			}
 			UpdateConnectionStatusIndicator();
@@ -495,7 +676,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			string text = OpenMANET_Security.OperatorMessage(ex);
 			if (!_refreshFailureActive)
 			{
-				AddMeshEvent("WARNING", "OpenMANET polling failed: " + text);
+				AddMeshEvent("WARNING", "OpenMANET polling failed: " + text, OpenMANET_EventCategory.Connection);
 				_refreshFailureActive = true;
 			}
 			UpdateHealthFindings();
@@ -642,7 +823,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			bool flag = IsBelowWithHysteresis(_bandwidthIsLow == true, bandwidthSample.MegabitsPerSecond, LowBandwidthThresholdMbps, BandwidthHysteresisMbps);
 			if (_bandwidthIsLow.HasValue && _bandwidthIsLow.Value != flag)
 			{
-				AddMeshEvent(flag ? "WARNING" : "INFO", flag ? ("Mesh bandwidth fell below " + LowBandwidthThresholdMbps.ToString("0.0", CultureInfo.InvariantCulture) + " Mbps.") : ("Mesh bandwidth recovered to " + (LowBandwidthThresholdMbps + BandwidthHysteresisMbps).ToString("0.0", CultureInfo.InvariantCulture) + " Mbps or more."));
+				AddMeshEvent(flag ? "WARNING" : "INFO", flag ? ("Mesh bandwidth fell below " + LowBandwidthThresholdMbps.ToString("0.0", CultureInfo.InvariantCulture) + " Mbps.") : ("Mesh bandwidth recovered to " + (LowBandwidthThresholdMbps + BandwidthHysteresisMbps).ToString("0.0", CultureInfo.InvariantCulture) + " Mbps or more."), OpenMANET_EventCategory.Links);
 			}
 			_bandwidthIsLow = flag;
 			BandwidthEmptyState.Visibility = Visibility.Collapsed;
@@ -868,7 +1049,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	{
 		if (_meshInterfaceAvailable.HasValue && _meshInterfaceAvailable.Value != available)
 		{
-			AddMeshEvent(available ? "INFO" : "CRITICAL", available ? "HaLow mesh interface recovered." : "HaLow mesh interface is unavailable.");
+			AddMeshEvent(available ? "INFO" : "CRITICAL", available ? "HaLow mesh interface recovered." : "HaLow mesh interface is unavailable.", OpenMANET_EventCategory.Gateway);
 		}
 		_meshInterfaceAvailable = available;
 	}
@@ -924,7 +1105,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			{
 				severity = ((text2 == "Warning") ? "WARNING" : "INFO");
 			}
-			openMANET.AddMeshEvent(severity, (text2 == "Normal") ? ("Mesh utilization returned below " + (WarningUtilizationPercent - UtilizationHysteresisPercent).ToString("0", CultureInfo.InvariantCulture) + "%.") : ("Mesh utilization entered the " + text2.ToLowerInvariant() + " range at " + num.ToString("0.0", CultureInfo.InvariantCulture) + "%."));
+			openMANET.AddMeshEvent(severity, (text2 == "Normal") ? ("Mesh utilization returned below " + (WarningUtilizationPercent - UtilizationHysteresisPercent).ToString("0", CultureInfo.InvariantCulture) + "%.") : ("Mesh utilization entered the " + text2.ToLowerInvariant() + " range at " + num.ToString("0.0", CultureInfo.InvariantCulture) + "%."), OpenMANET_EventCategory.Gateway);
 		}
 		_utilizationState = text2;
 		UtilizationProgressBar.Foreground = foreground;
@@ -951,9 +1132,13 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		return "Normal";
 	}
 
-	private void AddMeshEvent(string severity, string message)
+	private void AddMeshEvent(string severity, string message, OpenMANET_EventCategory category = OpenMANET_EventCategory.None)
 	{
 		string text = OpenMANET_Security.NormalizeDetail(message);
+		if (!string.IsNullOrWhiteSpace(text) && _preferences.ShouldNotify(category))
+		{
+			OpenMANET_PluginHost.Notify(text);
+		}
 		if (!string.IsNullOrWhiteSpace(text))
 		{
 			string severity2;
@@ -1007,17 +1192,17 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			{
 				if (!_previousNodeStates.TryGetValue(item.Key, out var value))
 				{
-					AddMeshEvent("INFO", item.Value.Name + " joined the mesh.");
+					AddMeshEvent("INFO", item.Value.Name + " joined the mesh.", OpenMANET_EventCategory.Nodes);
 					continue;
 				}
 				NodeStateSnapshot value2 = item.Value;
 				if (value.IsOnline && !value2.IsOnline)
 				{
-					AddMeshEvent("WARNING", value2.Name + " became stale.");
+					AddMeshEvent("WARNING", value2.Name + " became stale.", OpenMANET_EventCategory.Nodes);
 				}
 				else if (!value.IsOnline && value2.IsOnline)
 				{
-					AddMeshEvent("INFO", value2.Name + (value.IsDiscovering ? " came online." : " recovered."));
+					AddMeshEvent("INFO", value2.Name + (value.IsDiscovering ? " came online." : " recovered."), OpenMANET_EventCategory.Nodes);
 				}
 				if (value.IsOnline && value2.IsOnline && !value.IsRouted && value2.IsRouted)
 				{
@@ -1037,14 +1222,14 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				}
 				if (value.RssiPoor != value2.RssiPoor)
 				{
-					AddMeshEvent(value2.RssiPoor ? "WARNING" : "INFO", value2.RssiPoor ? (value2.Name + " RSSI degraded below " + PoorRssiThresholdDbm.ToString(CultureInfo.InvariantCulture) + " dBm.") : (value2.Name + " RSSI recovered to " + (PoorRssiThresholdDbm + RssiHysteresisDb).ToString("0", CultureInfo.InvariantCulture) + " dBm or better."));
+					AddMeshEvent(value2.RssiPoor ? "WARNING" : "INFO", value2.RssiPoor ? (value2.Name + " RSSI degraded below " + PoorRssiThresholdDbm.ToString(CultureInfo.InvariantCulture) + " dBm.") : (value2.Name + " RSSI recovered to " + (PoorRssiThresholdDbm + RssiHysteresisDb).ToString("0", CultureInfo.InvariantCulture) + " dBm or better."), OpenMANET_EventCategory.Links);
 				}
 			}
 			foreach (KeyValuePair<string, NodeStateSnapshot> previousNodeState in _previousNodeStates)
 			{
 				if (!dictionary.ContainsKey(previousNodeState.Key))
 				{
-					AddMeshEvent("WARNING", previousNodeState.Value.Name + " left the mesh.");
+					AddMeshEvent("WARNING", previousNodeState.Value.Name + " left the mesh.", OpenMANET_EventCategory.Nodes);
 				}
 			}
 		}
@@ -1093,7 +1278,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			{
 				severity = ((text == "Offline") ? "CRITICAL" : "WARNING");
 			}
-			openMANET.AddMeshEvent(severity, "Mesh topology changed from " + _previousTopologyHealth + " to " + text + ".");
+			openMANET.AddMeshEvent(severity, "Mesh topology changed from " + _previousTopologyHealth + " to " + text + ".", OpenMANET_EventCategory.Gateway);
 		}
 		_previousTopologyHealth = text;
 		if (system == null)
@@ -1120,7 +1305,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	{
 		if (previousHigh != currentHigh)
 		{
-			AddMeshEvent(currentHigh ? "WARNING" : "INFO", currentHigh ? (metric + " crossed the " + threshold + " warning threshold.") : (metric + " recovered below " + clearThreshold + "."));
+			AddMeshEvent(currentHigh ? "WARNING" : "INFO", currentHigh ? (metric + " crossed the " + threshold + " warning threshold.") : (metric + " recovered below " + clearThreshold + "."), OpenMANET_EventCategory.Gateway);
 		}
 	}
 
@@ -1272,6 +1457,21 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			foreground = (flag2 ? WarningIndicatorBrush : SuccessIndicatorBrush);
 		}
 		healthSummaryText2.Foreground = foreground;
+		OpenMANET_MeshHealth health;
+		if (!_isConnected)
+		{
+			// A deliberate disconnect clears the toolbar badge; a dropped session shows red while reconnecting.
+			health = _reconnecting ? OpenMANET_MeshHealth.Critical : OpenMANET_MeshHealth.None;
+		}
+		else if (flag)
+		{
+			health = OpenMANET_MeshHealth.Critical;
+		}
+		else
+		{
+			health = flag2 ? OpenMANET_MeshHealth.Degraded : OpenMANET_MeshHealth.Healthy;
+		}
+		OpenMANET_PluginHost.SetHealth(health);
 	}
 
 	private void AddHealthFinding(string message, Brush indicatorBrush, bool critical)
@@ -1456,6 +1656,109 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				edge.ToName = to.NameDisplay;
 			}
 		}
+	}
+
+	private void LoadPreferenceControls()
+	{
+		NotifyNodesCheckBox.IsChecked = _preferences.NotifyNodes;
+		NotifyLinksCheckBox.IsChecked = _preferences.NotifyLinks;
+		NotifyGatewayCheckBox.IsChecked = _preferences.NotifyGateway;
+		NotifyConnectionCheckBox.IsChecked = _preferences.NotifyConnection;
+		AutoReconnectCheckBox.IsChecked = _preferences.AutoReconnect;
+	}
+
+	private void PreferenceCheckBox_Changed(object sender, RoutedEventArgs e)
+	{
+		_preferences.NotifyNodes = NotifyNodesCheckBox.IsChecked == true;
+		_preferences.NotifyLinks = NotifyLinksCheckBox.IsChecked == true;
+		_preferences.NotifyGateway = NotifyGatewayCheckBox.IsChecked == true;
+		_preferences.NotifyConnection = NotifyConnectionCheckBox.IsChecked == true;
+		_preferences.AutoReconnect = AutoReconnectCheckBox.IsChecked == true;
+		if (!_preferences.AutoReconnect)
+		{
+			// Turning it off drops the in-memory password right away.
+			if (_reconnecting)
+			{
+				StopReconnect("Automatic reconnect turned off.");
+			}
+			ClearReconnectPassword();
+		}
+		try
+		{
+			_preferences.Save();
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+		{
+			AddMeshEvent("WARNING", "Could not save alert preferences: " + ex.Message);
+		}
+	}
+
+	private void ExportCallsignsButton_Click(object sender, RoutedEventArgs e)
+	{
+		if (_callsigns.Count == 0)
+		{
+			MessageBox.Show("No callsigns have been assigned yet. Set them on the Nodes tab.", "OpenMANET", MessageBoxButton.OK, MessageBoxImage.Information);
+			return;
+		}
+		SaveFileDialog dialog = new SaveFileDialog
+		{
+			Title = "Export callsigns",
+			FileName = "openmanet-callsigns.csv",
+			Filter = "Callsign files (*.csv)|*.csv|All files (*.*)|*.*",
+			DefaultExt = ".csv"
+		};
+		if (dialog.ShowDialog() != true)
+		{
+			return;
+		}
+		try
+		{
+			_callsigns.ExportTo(dialog.FileName);
+			AddMeshEvent("INFO", "Exported " + _callsigns.Count.ToString(CultureInfo.InvariantCulture) + " callsigns.");
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+		{
+			MessageBox.Show(ex.Message, "OpenMANET", MessageBoxButton.OK, MessageBoxImage.Exclamation);
+		}
+	}
+
+	private void ImportCallsignsButton_Click(object sender, RoutedEventArgs e)
+	{
+		OpenFileDialog dialog = new OpenFileDialog
+		{
+			Title = "Import callsigns",
+			Filter = "Callsign files (*.csv)|*.csv|All files (*.*)|*.*",
+			CheckFileExists = true
+		};
+		if (dialog.ShowDialog() != true)
+		{
+			return;
+		}
+		int imported;
+		int skipped;
+		try
+		{
+			imported = _callsigns.ImportFrom(dialog.FileName, out skipped);
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is InvalidOperationException)
+		{
+			MessageBox.Show(ex.Message, "OpenMANET", MessageBoxButton.OK, MessageBoxImage.Exclamation);
+			return;
+		}
+		ApplyCallsigns(_lastNodes, _lastTopology);
+		if (NodeDetailsPanel.DataContext is OpenMANET_NodeInfo selected)
+		{
+			RefreshNodeNameViews(selected);
+		}
+		else
+		{
+			NodesListBox.Items.Refresh();
+			LinkQualityNodeComboBox.Items.Refresh();
+			RenderTopology();
+		}
+		string summary = "Imported " + imported.ToString(CultureInfo.InvariantCulture) + ((imported == 1) ? " callsign" : " callsigns") + ((skipped > 0) ? ("; skipped " + skipped.ToString(CultureInfo.InvariantCulture) + " invalid " + ((skipped == 1) ? "line" : "lines")) : string.Empty) + ".";
+		AddMeshEvent("INFO", summary);
+		MessageBox.Show(summary, "OpenMANET", MessageBoxButton.OK, MessageBoxImage.Information);
 	}
 
 	private void SaveCallsignButton_Click(object sender, RoutedEventArgs e)
@@ -2128,13 +2431,19 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	private void UpdateConnectionState(bool connected)
 	{
 		_isConnected = connected;
-		ConnectButton.Content = (connected ? "Disconnect" : "Connect");
+		bool locked = connected || _reconnecting;
+		ConnectButton.Content = (connected ? "Disconnect" : (_reconnecting ? "Stop Reconnecting" : "Connect"));
 		RefreshButton.IsEnabled = connected;
-		ConnectionSettingsPanel.IsEnabled = !connected;
-		ConnectionSettingsPanel.Opacity = (connected ? 0.5 : 1.0);
+		ConnectionSettingsPanel.IsEnabled = !locked;
+		ConnectionSettingsPanel.Opacity = (locked ? 0.5 : 1.0);
 		if (connected)
 		{
 			UpdateConnectionStatusIndicator();
+		}
+		else if (_reconnecting)
+		{
+			ConnectionStatusText.Text = "Reconnecting...";
+			ConnectionStatusIndicator.Fill = WarningIndicatorBrush;
 		}
 		else
 		{
@@ -2224,6 +2533,8 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		_throughputTimer.Stop();
 		CancelOutstandingOperations();
 		bool flag = await _client.LogoutAsync(CancellationToken.None);
+		// A deliberate disconnect or a failed manual login ends any automatic reconnect.
+		ClearReconnectPassword();
 		ResetConnection();
 		if (wasConnected && !flag)
 		{
@@ -2235,8 +2546,15 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	{
 		if (_isConnected)
 		{
+			bool canReconnect = _preferences.AutoReconnect && _protectedPassword != null;
 			ResetConnection();
-			AddMeshEvent("WARNING", "OpenMANET authentication expired or was rejected. Reconnect to continue monitoring.");
+			if (canReconnect)
+			{
+				AddMeshEvent("WARNING", "OpenMANET session expired or was rejected; reconnecting automatically.", OpenMANET_EventCategory.Connection);
+				StartReconnect();
+				return;
+			}
+			AddMeshEvent("WARNING", "OpenMANET authentication expired or was rejected. Reconnect to continue monitoring.", OpenMANET_EventCategory.Connection);
 			MainTabControl.SelectedIndex = 4;
 			ConnectionStatusText.Text = "Authentication expired - reconnect";
 			ConnectionStatusIndicator.Fill = WarningIndicatorBrush;
@@ -2249,6 +2567,10 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		_autoRefreshTimer.Stop();
 		_throughputTimer.Stop();
 		CancelOutstandingOperations();
+		_reconnectCancellation?.Cancel();
+		ClearReconnectPassword();
+		OpenMANET_PluginHost.RemoveOwnNotifications();
+		OpenMANET_PluginHost.SetHealth(OpenMANET_MeshHealth.None);
 		// The dispatcher is going away, so the async UI path can't finish. The client never
 		// resumes on the UI thread, so a short bounded wait here can't deadlock.
 		try

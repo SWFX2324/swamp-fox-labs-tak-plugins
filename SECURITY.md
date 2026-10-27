@@ -6,7 +6,7 @@ Security fixes go into the latest release only. Please update to the newest vers
 
 | Plugin | Supported | Not supported |
 | --- | --- | --- |
-| OpenMANET for WinTAK | 2.0.7.x (latest) | Anything older |
+| OpenMANET for WinTAK | 2.0.8.x (latest) | Anything older |
 
 ## Reporting a vulnerability
 
@@ -40,9 +40,11 @@ Out of scope, so please report these to their own maintainers:
 - Response sizes, item counts and request times are capped, and data from the node is validated before it's shown.
 
 **Credentials**
-- The **password is never stored**. It's cleared from the form as soon as you connect.
+- The **password is never written to disk**. It's cleared from the form as soon as you connect.
+- With **automatic reconnect** on (the default), the password is kept in memory while you're connected, encrypted with Windows DPAPI for your Windows account, so the plugin can sign back in after a node reboot. It's wiped when you disconnect, turn the option off, the node rejects it, or WinTAK closes. Turn automatic reconnect off in Settings to keep no copy at all.
 - The session token is kept in memory only. On disconnect and when WinTAK shuts down, the plugin asks the node to sign the session out.
-- Saved on disk, in `%APPDATA%\WinTAK\Plugins\WinTAK_OpenMANET_Plugin\` in plain text: the gateway address, port and username (`connection.settings`), plus any callsigns you assign (`callsigns.settings`). Nothing secret is saved there.
+- Saved on disk, in `%APPDATA%\WinTAK\Plugins\WinTAK_OpenMANET_Plugin\` in plain text: the gateway address, port and username (`connection.settings`), any callsigns you assign (`callsigns.settings`), and your alert and reconnect choices (`preferences.settings`). Nothing secret is saved there.
+- WinTAK notifications carry the same text as the plugin's event log (node names, status and error messages, never credentials). The plugin removes its notifications from WinTAK's saved notification list when WinTAK closes.
 
 **Diagnostics**
 - Snapshots never include credentials.

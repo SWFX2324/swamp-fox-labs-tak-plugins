@@ -92,7 +92,7 @@ foreach ($e in @(
     @("INFO", "Node4 joined the mesh."),
     @("WARNING", "RELAY 2 RSSI degraded below -75 dBm."),
     @("INFO", "RELAY 2 RSSI recovered to -72 dBm or better."),
-    @("INFO", "Node3 route established."))) { M "AddMeshEvent" $e }
+    @("INFO", "Node3 route established."))) { M "AddMeshEvent" @($e[0], $e[1], [Enum]::Parse($asm.GetType($ns + "OpenMANET_EventCategory"), "None")) }
 
 # Charts: 60 s of bandwidth/throughput samples, 60 min of trends for the selected node.
 $bw = F "_bandwidthSamples"; $tp = F "_throughputSamples"
@@ -139,6 +139,6 @@ Shoot 0 "dashboard" 1040
 Shoot 1 "topology" 1040
 Shoot 2 "nodes" 1040
 Shoot 3 "system" 1040
-Shoot 4 "settings" 760
+Shoot 4 "settings" 1040
 $w.Close()
 "ok"

@@ -18,6 +18,7 @@ A docked WinTAK pane for operators running an OpenMANET mesh:
 - **Topology:** a live map of nodes and links from the connected node, including BLOS links.
 - **Nodes:** per-node RSSI, link quality, routing, 60-minute trends, and optional vanity callsigns.
 - **System:** health findings, CPU, memory, storage, temperature and interfaces on the connected node.
+- **Alerts:** WinTAK notifications for node, link, gateway and connection changes, a health dot on the toolbar icon, and automatic reconnect.
 - **Diagnostics:** redacted or full snapshots for troubleshooting. Credentials are never included.
 
 See the [plugin README](wintak/OpenMANET/README.md) for node status meanings, requirements and build steps.

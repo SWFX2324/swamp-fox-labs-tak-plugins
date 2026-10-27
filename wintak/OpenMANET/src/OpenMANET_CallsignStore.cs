@@ -111,6 +111,58 @@ internal sealed class OpenMANET_CallsignStore
 		Save();
 	}
 
+	public int Count => _entries.Count;
+
+	/// <summary>Writes every callsign to a CSV file (mac,hostname,callsign) for sharing.</summary>
+	public void ExportTo(string path)
+	{
+		List<string> lines = new List<string> { "mac,hostname,callsign" };
+		lines.AddRange(_entries.Select((Entry e) => (e.Mac ?? string.Empty) + "," + (e.Hostname ?? string.Empty) + "," + e.Callsign));
+		File.WriteAllLines(path, lines, new UTF8Encoding(false));
+	}
+
+	/// <summary>
+	/// Merges callsigns from a CSV export into this store, replacing existing entries for the same
+	/// node. Invalid lines are skipped. Returns how many entries were imported.
+	/// </summary>
+	public int ImportFrom(string path, out int skipped)
+	{
+		skipped = 0;
+		if (new FileInfo(path).Length > MaximumFileBytes)
+		{
+			throw new InvalidOperationException("The callsign file is too large.");
+		}
+		int imported = 0;
+		foreach (string raw in File.ReadAllLines(path, Encoding.UTF8))
+		{
+			string line = raw.Trim();
+			if (line.Length == 0 || line.StartsWith("mac,", StringComparison.OrdinalIgnoreCase))
+			{
+				continue;
+			}
+			// Callsigns can't contain commas or tabs, so a plain split is safe.
+			string[] parts = line.Split(line.IndexOf('\t') >= 0 ? '\t' : ',');
+			string mac = (parts.Length == 3) ? NormalizeMac(parts[0]) : null;
+			string hostname = (parts.Length == 3) ? NormalizeHostname(parts[1]) : null;
+			string callsign = (parts.Length == 3) ? Normalize(parts[2]) : null;
+			if (callsign == null || (mac == null && hostname == null))
+			{
+				skipped++;
+				continue;
+			}
+			_entries.RemoveAll((Entry e) => (mac != null) ? (e.Mac == mac || (e.Mac == null && e.Hostname == hostname)) : (e.Mac == null && e.Hostname == hostname));
+			if (_entries.Count >= MaximumEntries)
+			{
+				skipped++;
+				continue;
+			}
+			_entries.Add(new Entry { Mac = mac, Hostname = hostname, Callsign = callsign });
+			imported++;
+		}
+		Save();
+		return imported;
+	}
+
 	private void Save()
 	{
 		string directory = Path.GetDirectoryName(_filePath);
