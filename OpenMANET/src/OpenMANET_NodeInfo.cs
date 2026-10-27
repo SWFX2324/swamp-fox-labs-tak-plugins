@@ -130,7 +130,11 @@ internal sealed class OpenMANET_NodeInfo
 			{
 				return HasLiveLink ? "Routed, direct link up" : "Routed";
 			}
-			return IsDiscovering ? "Listed, waiting for a route or link" : "No route or recent link";
+			if (IsDiscovering)
+			{
+				return "Listed, waiting for a route or link";
+			}
+			return IsRouted ? "Radio link silent, old route still expiring" : "No route or recent link";
 		}
 	}
 

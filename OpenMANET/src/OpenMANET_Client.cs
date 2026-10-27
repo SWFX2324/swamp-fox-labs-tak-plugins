@@ -317,6 +317,10 @@ internal sealed class OpenMANET_Client : IDisposable
 	// produced a route to it, which can take several minutes after a node boots.
 	private const long FreshLinkMilliseconds = 15000L;
 
+	// A direct neighbor unheard for this long is treated as gone. BATMAN keeps its route and
+	// topology edge for ~200 s after the node powers off, so those can't be trusted for it.
+	private const long LostLinkMilliseconds = 30000L;
+
 	private const string LoginPath = "auth/login";
 
 	private const string LogoutPath = "auth/logout";
@@ -335,6 +339,9 @@ internal sealed class OpenMANET_Client : IDisposable
 
 	// Nodes seen online at least once this session; the rest are still being discovered.
 	private readonly HashSet<string> _everOnlineNodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+	// Nodes whose radio neighbor entry has matched at least once this session.
+	private readonly HashSet<string> _directNeighborNodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 	private HttpClient _httpClient;
 
@@ -522,6 +529,7 @@ internal sealed class OpenMANET_Client : IDisposable
 		{
 			_lastSeenByNode.Clear();
 			_everOnlineNodes.Clear();
+			_directNeighborNodes.Clear();
 			return list2;
 		}
 		foreach (NodeResponse node3 in knownNodes.Nodes)
@@ -552,9 +560,16 @@ internal sealed class OpenMANET_Client : IDisposable
 			{
 				matchedNeighbors.Add(matched);
 			}
-			bool directEdge = HasDirectEdgeFromSelf(topology, selfMacs, nodeMacs);
+			if (meshNeighborResponse != null)
+			{
+				_directNeighborNodes.Add(nodeKey);
+			}
+			bool knownDirectNeighbor = _directNeighborNodes.Contains(nodeKey);
+			// The topology edge has no age, so it only helps a node whose radio neighbor entry
+			// has never matched; once it has, that entry's last-seen age is the better signal.
+			bool directEdge = !knownDirectNeighbor && HasDirectEdgeFromSelf(topology, selfMacs, nodeMacs);
 			bool liveLink = IsFreshLink(meshNeighborResponse) || directEdge;
-			bool flag = routed || liveLink;
+			bool flag = !IsDirectLinkLost(knownDirectNeighbor, meshNeighborResponse, value) && (routed || liveLink);
 			if (flag)
 			{
 				_lastSeenByNode[nodeKey] = utcNow;
@@ -664,6 +679,7 @@ internal sealed class OpenMANET_Client : IDisposable
 		_lastNeighbors = null;
 		_lastSeenByNode.Clear();
 		_everOnlineNodes.Clear();
+		_directNeighborNodes.Clear();
 		if (_httpClient != null)
 		{
 			_httpClient.Dispose();
@@ -780,6 +796,31 @@ internal sealed class OpenMANET_Client : IDisposable
 			_lastSeenByNode.Remove(item);
 		}
 		_everOnlineNodes.IntersectWith(_lastSeenByNode.Keys);
+		_directNeighborNodes.IntersectWith(_lastSeenByNode.Keys);
+	}
+
+	/// <summary>
+	/// True when a node that has been a direct neighbor has gone quiet on the radio and its route,
+	/// if any, is still the direct one. A node reachable over a multi-hop route is left to the route.
+	/// </summary>
+	private static bool IsDirectLinkLost(bool knownDirectNeighbor, MeshNeighborResponse neighbor, TopologyNodeResponse topologyNode)
+	{
+		if (!knownDirectNeighbor)
+		{
+			return false;
+		}
+		int? hops = topologyNode?.HopsFromSelf;
+		if (hops.HasValue && hops.Value >= 2 && hops.Value < 99)
+		{
+			return false;
+		}
+		if (neighbor == null)
+		{
+			// The neighbor entry has been purged.
+			return true;
+		}
+		long? lastSeen = GetLastSeenMilliseconds(neighbor.LastSeen);
+		return lastSeen.HasValue && lastSeen.Value > LostLinkMilliseconds;
 	}
 
 	private static bool IsFreshLink(MeshNeighborResponse neighbor)
