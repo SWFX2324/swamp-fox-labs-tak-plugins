@@ -251,7 +251,9 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				Interval = ThroughputSampleInterval
 			};
 			_throughputTimer.Tick += ThroughputTimer_Tick;
-			Unloaded += OpenMANET_Unloaded;
+			// Closing the dock pane only hides its tool window and the same control comes back
+			// on reopen, so monitoring keeps running until WinTAK itself shuts down.
+			Dispatcher.ShutdownStarted += Dispatcher_ShutdownStarted;
 			string path = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinTAK", "Plugins", "WinTAK_OpenMANET_Plugin");
 			_settingsFilePath = System.IO.Path.Combine(path, "connection.settings");
 			LoadConnectionSettings();
@@ -1965,9 +1967,21 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		}
 	}
 
-	private async void OpenMANET_Unloaded(object sender, RoutedEventArgs e)
+	private void Dispatcher_ShutdownStarted(object sender, EventArgs e)
 	{
-		await ResetConnectionWithLogoutAsync();
+		Dispatcher.ShutdownStarted -= Dispatcher_ShutdownStarted;
+		_autoRefreshTimer.Stop();
+		_throughputTimer.Stop();
+		CancelOutstandingOperations();
+		// The dispatcher is going away, so the async UI path can't finish. The client never
+		// resumes on the UI thread, so a short bounded wait here can't deadlock.
+		try
+		{
+			Task.Run(() => _client.LogoutAsync(CancellationToken.None)).Wait(OpenMANET_Security.LogoutTimeout);
+		}
+		catch
+		{
+		}
 	}
 
 	private CancellationToken GetOperationToken()
