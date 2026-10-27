@@ -8,6 +8,23 @@ A WinTAK plugin for monitoring an OpenMANET HaLow mesh from a WinTAK client. It 
 - **System:** health findings, CPU, memory, storage and temperature, and network interfaces on the connected node.
 - **Diagnostics:** redacted or full snapshots for troubleshooting. Credentials are never included.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/dashboard.png" width="230" alt="Dashboard tab: summary tiles, mesh node list with status labels, bandwidth chart"><br><b>Dashboard</b></td>
+    <td align="center"><img src="docs/screenshots/topology.png" width="230" alt="Topology tab: mesh health tiles and a live map of nodes and links"><br><b>Topology</b></td>
+    <td align="center"><img src="docs/screenshots/nodes.png" width="230" alt="Nodes tab: selected node with link quality, callsign editor and connection details"><br><b>Nodes</b></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/system.png" width="230" alt="System tab: health findings, CPU, memory, storage and network interfaces"><br><b>System</b></td>
+    <td align="center"><img src="docs/screenshots/settings.png" width="230" alt="Settings tab: connection settings and diagnostic snapshot export"><br><b>Settings</b></td>
+    <td></td>
+  </tr>
+</table>
+
+<sub>Screenshots use sample data. Node names, callsigns, addresses and MACs are illustrative.</sub>
+
 Node status:
 
 | Status | Meaning |
@@ -39,3 +56,5 @@ You need the .NET SDK and WinTAK 5.7.0.144 installed (the build references its S
 ```
 
 The package is written to `dist\OpenMANET-<version>-<sdk>.wpk`. Versions come from `src/Properties/AssemblyInfo.cs`.
+
+After UI changes, regenerate the README screenshots with `.\docs\render-screenshots.ps1`. It renders the built plugin with sample data, so no real network details end up in the images.

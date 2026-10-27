@@ -10,6 +10,8 @@ Plugins for the TAK (Team Awareness Kit) ecosystem from Swamp Fox Labs.
 
 ### OpenMANET for WinTAK
 
+<img src="wintak/OpenMANET/docs/screenshots/dashboard.png" width="260" align="right" alt="OpenMANET dashboard in WinTAK, showing summary tiles and the mesh node list">
+
 A docked WinTAK pane for operators running an OpenMANET mesh:
 
 - **Dashboard:** nodes online, mesh bandwidth, throughput and utilization, plus the node list and an event log.
