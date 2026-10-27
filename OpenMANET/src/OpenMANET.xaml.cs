@@ -145,7 +145,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 	private const string LegacyDirectPort = "8087";
 
-	private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromMinutes(2.0);
+	private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromSeconds(15.0);
 
 	private static readonly TimeSpan ThroughputSampleInterval = TimeSpan.FromSeconds(5.0);
 
@@ -196,6 +196,8 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	private readonly Dictionary<string, List<NodeTrendSample>> _nodeTrendHistory = new Dictionary<string, List<NodeTrendSample>>(StringComparer.OrdinalIgnoreCase);
 
 	private List<OpenMANET_NodeInfo> _lastNodes = new List<OpenMANET_NodeInfo>();
+
+	private readonly Dictionary<string, string> _endpointFailures = new Dictionary<string, string>(StringComparer.Ordinal);
 
 	private bool _isConnected;
 
@@ -363,7 +365,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 	private async void RefreshButton_Click(object sender, RoutedEventArgs e)
 	{
-		await RefreshAsync();
+		await RefreshAsync(showProgress: true);
 	}
 
 	private async void AutoRefreshTimer_Tick(object sender, EventArgs e)
@@ -377,7 +379,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		await SampleThroughputAsync();
 	}
 
-	private async Task RefreshAsync()
+	private async Task RefreshAsync(bool showProgress = false)
 	{
 		if (!_isConnected || _refreshInProgress)
 		{
@@ -386,9 +388,15 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		_refreshInProgress = true;
 		try
 		{
-			RefreshButton.IsEnabled = false;
-			RefreshButton.Content = "Refreshing...";
+			// Background polls run every few seconds; only a manual refresh shows progress
+			// so the button doesn't flicker.
+			if (showProgress)
+			{
+				RefreshButton.IsEnabled = false;
+				RefreshButton.Content = "Refreshing...";
+			}
 			List<OpenMANET_NodeInfo> list = await _client.ListNodesAsync(GetOperationToken());
+			UpdateEndpointFailures(_client.LastRefreshFailures);
 			UpdateTopology(_client.LastTopology);
 			UpdateSystemDetails(_client.LastSystemDetails);
 			UpdateNodeEvents(list);
@@ -399,9 +407,8 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			{
 				AddMeshEvent("INFO", "OpenMANET polling recovered.");
 				_refreshFailureActive = false;
-				ConnectionStatusText.Text = "Connected";
-				ConnectionStatusIndicator.Fill = Brushes.LimeGreen;
 			}
+			UpdateConnectionStatusIndicator();
 			OpenMANET_NodeInfo openMANET_NodeInfo = FindSelectedNode(list);
 			NodesListBox.ItemsSource = list;
 			if (openMANET_NodeInfo != null)
@@ -445,8 +452,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				_refreshFailureActive = true;
 			}
 			UpdateHealthFindings();
-			ConnectionStatusText.Text = "Connected - polling delayed";
-			ConnectionStatusIndicator.Fill = Brushes.Goldenrod;
+			UpdateConnectionStatusIndicator();
 		}
 		finally
 		{
@@ -978,6 +984,29 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		}
 	}
 
+	private void UpdateEndpointFailures(IReadOnlyDictionary<string, string> failures)
+	{
+		foreach (KeyValuePair<string, string> failure in failures)
+		{
+			if (!_endpointFailures.ContainsKey(failure.Key))
+			{
+				AddMeshEvent("WARNING", failure.Key + " unavailable; showing last known data. " + failure.Value);
+			}
+		}
+		foreach (string endpoint in _endpointFailures.Keys)
+		{
+			if (!failures.ContainsKey(endpoint))
+			{
+				AddMeshEvent("INFO", endpoint + " recovered.");
+			}
+		}
+		_endpointFailures.Clear();
+		foreach (KeyValuePair<string, string> failure in failures)
+		{
+			_endpointFailures[failure.Key] = failure.Value;
+		}
+	}
+
 	private void UpdateOperationalEvents(OpenMANET_TopologyInfo topology, OpenMANET_SystemInfo system)
 	{
 		string text = ((topology == null) ? "Offline" : topology.HealthDisplay);
@@ -1054,6 +1083,11 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			if (_refreshFailureActive)
 			{
 				AddHealthFinding("The latest OpenMANET poll failed; displayed data may be stale.", Brushes.Goldenrod, critical: false);
+				flag2 = true;
+			}
+			foreach (KeyValuePair<string, string> endpointFailure in _endpointFailures)
+			{
+				AddHealthFinding(endpointFailure.Key + " unavailable; showing last known data. " + endpointFailure.Value, Brushes.Goldenrod, critical: false);
 				flag2 = true;
 			}
 			foreach (OpenMANET_NodeInfo lastNode in _lastNodes)
@@ -1870,33 +1904,49 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	private void UpdateConnectionState(bool connected)
 	{
 		_isConnected = connected;
-		bool flag = connected && AllowInsecureHttpCheckBox.IsChecked == true;
 		ConnectButton.Content = (connected ? "Disconnect" : "Connect");
 		RefreshButton.IsEnabled = connected;
 		ConnectionSettingsPanel.IsEnabled = !connected;
 		ConnectionSettingsPanel.Opacity = (connected ? 0.5 : 1.0);
-		TextBlock connectionStatusText = ConnectionStatusText;
+		if (connected)
+		{
+			UpdateConnectionStatusIndicator();
+		}
+		else
+		{
+			ConnectionStatusText.Text = "Not Connected";
+			ConnectionStatusIndicator.Fill = Brushes.Red;
+		}
+	}
+
+	/// <summary>Sets the header status for a live connection, worst condition first.</summary>
+	private void UpdateConnectionStatusIndicator()
+	{
+		if (!_isConnected)
+		{
+			return;
+		}
 		string text;
-		if (flag)
+		SolidColorBrush fill = Brushes.Goldenrod;
+		if (_refreshFailureActive)
+		{
+			text = "Connected - polling delayed";
+		}
+		else if (_endpointFailures.Count > 0)
+		{
+			text = "Connected - partial data";
+		}
+		else if (AllowInsecureHttpCheckBox.IsChecked == true)
 		{
 			text = "Connected — INSECURE HTTP";
 		}
 		else
 		{
-			text = (connected ? "Connected" : "Not Connected");
+			text = "Connected";
+			fill = Brushes.LimeGreen;
 		}
-		connectionStatusText.Text = text;
-		Ellipse connectionStatusIndicator = ConnectionStatusIndicator;
-		SolidColorBrush fill;
-		if (flag)
-		{
-			fill = Brushes.Goldenrod;
-		}
-		else
-		{
-			fill = (connected ? Brushes.LimeGreen : Brushes.Red);
-		}
-		connectionStatusIndicator.Fill = fill;
+		ConnectionStatusText.Text = text;
+		ConnectionStatusIndicator.Fill = fill;
 	}
 
 	private void ResetConnection()
@@ -1908,6 +1958,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		_client.Disconnect();
 		PasswordInput.Password = string.Empty;
 		_lastNodes.Clear();
+		_endpointFailures.Clear();
 		_previousNodeStates.Clear();
 		_nodeTrendHistory.Clear();
 		_nodeBaselineEstablished = false;

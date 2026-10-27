@@ -5,6 +5,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Runtime.ExceptionServices;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Text;
@@ -336,11 +337,22 @@ internal sealed class OpenMANET_Client : IDisposable
 
 	private bool _usesSecureFrontend;
 
+	// Last good response from each refresh endpoint, reused when that endpoint fails so one
+	// bad call doesn't blank the rest of the picture or mark every node stale.
+	private ListNodesResponse _lastKnownNodes;
+
+	private MeshTopology _lastTopologyResponse;
+
+	private List<MeshNeighborResponse> _lastNeighbors;
+
 	public bool IsConnected { get; private set; }
 
 	public OpenMANET_TopologyInfo LastTopology { get; private set; }
 
 	public OpenMANET_SystemInfo LastSystemDetails { get; private set; }
+
+	/// <summary>Endpoints that failed on the latest refresh, mapped to an operator-safe message.</summary>
+	public IReadOnlyDictionary<string, string> LastRefreshFailures { get; private set; } = new Dictionary<string, string>();
 
 	public async Task LoginAsync(string host, int port, string username, string password, bool allowInsecureHttp, CancellationToken cancellationToken)
 	{
@@ -358,7 +370,8 @@ internal sealed class OpenMANET_Client : IDisposable
 			AllowAutoRedirect = false,
 			UseCookies = false,
 			UseProxy = false,
-			MaxConnectionsPerServer = 2
+			// Refresh issues four RPCs at once while the 5 s link sampler may also be in flight.
+			MaxConnectionsPerServer = 4
 		};
 		_sessionCancellation = new CancellationTokenSource();
 		_httpClient = new HttpClient(handler)
@@ -396,22 +409,75 @@ internal sealed class OpenMANET_Client : IDisposable
 		CancellationToken token = ((_sessionCancellation != null) ? _sessionCancellation.Token : CancellationToken.None);
 		using CancellationTokenSource refreshCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, token);
 		refreshCancellation.CancelAfter(OpenMANET_Security.RefreshTimeout);
-		ListNodesResponse knownNodes = await PostAsync<ListNodesResponse>("openmanet.service.v1.NodeService/ListNodes", "Unable to retrieve OpenMANET nodes", refreshCancellation.Token).ConfigureAwait(continueOnCapturedContext: false);
-		MeshTopologyResponse topologyResponse = await PostAsync<MeshTopologyResponse>("openmanet.mesh_topology.v1.MeshTopologyService/GetMeshTopology", "Unable to retrieve OpenMANET topology", refreshCancellation.Token).ConfigureAwait(continueOnCapturedContext: false);
-		ListMeshNeighborsResponse neighborResponse = await PostAsync<ListMeshNeighborsResponse>("openmanet.service.v1.MeshNeighborService/ListMeshNeighbors", "Unable to retrieve OpenMANET link quality", refreshCancellation.Token).ConfigureAwait(continueOnCapturedContext: false);
-		DashboardStatusResponse response = await PostAsync<DashboardStatusResponse>("openmanet.dashboard.v1.DashboardService/GetDashboardStatus", "Unable to retrieve OpenMANET system details", refreshCancellation.Token).ConfigureAwait(continueOnCapturedContext: false);
-		List<MeshNeighborResponse> list = neighborResponse?.Neighbors ?? new List<MeshNeighborResponse>();
-		LastTopology = CreateTopologyInfo(topologyResponse?.Topology);
-		LastSystemDetails = CreateSystemInfo(response);
+		Task<ListNodesResponse> nodesTask = PostAsync<ListNodesResponse>("openmanet.service.v1.NodeService/ListNodes", "Unable to retrieve OpenMANET nodes", refreshCancellation.Token);
+		Task<MeshTopologyResponse> topologyTask = PostAsync<MeshTopologyResponse>("openmanet.mesh_topology.v1.MeshTopologyService/GetMeshTopology", "Unable to retrieve OpenMANET topology", refreshCancellation.Token);
+		Task<ListMeshNeighborsResponse> neighborsTask = PostAsync<ListMeshNeighborsResponse>("openmanet.service.v1.MeshNeighborService/ListMeshNeighbors", "Unable to retrieve OpenMANET link quality", refreshCancellation.Token);
+		Task<DashboardStatusResponse> dashboardTask = PostAsync<DashboardStatusResponse>("openmanet.dashboard.v1.DashboardService/GetDashboardStatus", "Unable to retrieve OpenMANET system details", refreshCancellation.Token);
+		try
+		{
+			await Task.WhenAll(nodesTask, topologyTask, neighborsTask, dashboardTask).ConfigureAwait(continueOnCapturedContext: false);
+		}
+		catch
+		{
+			// Each task is inspected individually below.
+		}
+		// Check every endpoint before applying any result so an expired session or a
+		// disconnect is reported as such rather than as a partial refresh.
+		Exception nodesFailure = GetEndpointFailure(nodesTask, cancellationToken, token);
+		Exception topologyFailure = GetEndpointFailure(topologyTask, cancellationToken, token);
+		Exception neighborsFailure = GetEndpointFailure(neighborsTask, cancellationToken, token);
+		Exception dashboardFailure = GetEndpointFailure(dashboardTask, cancellationToken, token);
+		Dictionary<string, string> failures = new Dictionary<string, string>(StringComparer.Ordinal);
+		if (nodesFailure == null)
+		{
+			_lastKnownNodes = nodesTask.Result;
+		}
+		else if (_lastKnownNodes == null)
+		{
+			ExceptionDispatchInfo.Capture(nodesFailure).Throw();
+		}
+		else
+		{
+			failures["Node list"] = OpenMANET_Security.OperatorMessage(nodesFailure);
+		}
+		if (topologyFailure == null)
+		{
+			_lastTopologyResponse = topologyTask.Result?.Topology;
+		}
+		else
+		{
+			failures["Topology"] = OpenMANET_Security.OperatorMessage(topologyFailure);
+		}
+		if (neighborsFailure == null)
+		{
+			_lastNeighbors = neighborsTask.Result?.Neighbors;
+		}
+		else
+		{
+			failures["Link quality"] = OpenMANET_Security.OperatorMessage(neighborsFailure);
+		}
+		if (dashboardFailure == null)
+		{
+			LastSystemDetails = CreateSystemInfo(dashboardTask.Result);
+		}
+		else
+		{
+			failures["System status"] = OpenMANET_Security.OperatorMessage(dashboardFailure);
+		}
+		LastRefreshFailures = failures;
+		ListNodesResponse knownNodes = _lastKnownNodes;
+		MeshTopology topology = _lastTopologyResponse;
+		List<MeshNeighborResponse> list = _lastNeighbors ?? new List<MeshNeighborResponse>();
+		LastTopology = CreateTopologyInfo(topology);
 		DateTimeOffset utcNow = DateTimeOffset.UtcNow;
 		HashSet<string> hashSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		if (!string.IsNullOrWhiteSpace(topologyResponse?.Topology?.SelfHostname))
+		if (!string.IsNullOrWhiteSpace(topology?.SelfHostname))
 		{
-			hashSet.Add(topologyResponse.Topology.SelfHostname.Trim());
+			hashSet.Add(topology.SelfHostname.Trim());
 		}
-		if (topologyResponse?.Topology?.Nodes != null)
+		if (topology?.Nodes != null)
 		{
-			foreach (TopologyNodeResponse node in topologyResponse.Topology.Nodes)
+			foreach (TopologyNodeResponse node in topology.Nodes)
 			{
 				if (node != null && (node.IsSelf || (node.HopsFromSelf.HasValue && node.HopsFromSelf.Value < 99)) && !string.IsNullOrWhiteSpace(node.Hostname))
 				{
@@ -421,9 +487,9 @@ internal sealed class OpenMANET_Client : IDisposable
 		}
 		Dictionary<string, TopologyNodeResponse> dictionary = new Dictionary<string, TopologyNodeResponse>(StringComparer.OrdinalIgnoreCase);
 		Dictionary<string, TopologyNodeResponse> dictionary2 = new Dictionary<string, TopologyNodeResponse>(StringComparer.OrdinalIgnoreCase);
-		if (topologyResponse?.Topology?.Nodes != null)
+		if (topology?.Nodes != null)
 		{
-			foreach (TopologyNodeResponse node2 in topologyResponse.Topology.Nodes)
+			foreach (TopologyNodeResponse node2 in topology.Nodes)
 			{
 				if (node2 != null)
 				{
@@ -563,6 +629,10 @@ internal sealed class OpenMANET_Client : IDisposable
 		IsConnected = false;
 		LastTopology = null;
 		LastSystemDetails = null;
+		LastRefreshFailures = new Dictionary<string, string>();
+		_lastKnownNodes = null;
+		_lastTopologyResponse = null;
+		_lastNeighbors = null;
 		_lastSeenByNode.Clear();
 		if (_httpClient != null)
 		{
@@ -636,6 +706,25 @@ internal sealed class OpenMANET_Client : IDisposable
 		CancellationTokenSource cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, token);
 		cancellationTokenSource.CancelAfter(OpenMANET_Security.RequestTimeout);
 		return cancellationTokenSource;
+	}
+
+	/// <summary>
+	/// Returns why a refresh endpoint failed, or null if it succeeded. Rethrows failures that
+	/// end the whole refresh: an expired session, or a disconnect/session cancellation.
+	/// Per-request timeouts are reported as an ordinary endpoint failure.
+	/// </summary>
+	private static Exception GetEndpointFailure(Task task, CancellationToken cancellationToken, CancellationToken sessionToken)
+	{
+		if (task.Status == TaskStatus.RanToCompletion)
+		{
+			return null;
+		}
+		Exception exception = task.Exception?.GetBaseException() ?? new OperationCanceledException("The OpenMANET request was cancelled.");
+		if (exception is OpenMANET_AuthenticationException || cancellationToken.IsCancellationRequested || sessionToken.IsCancellationRequested)
+		{
+			ExceptionDispatchInfo.Capture(exception).Throw();
+		}
+		return exception;
 	}
 
 	private void EnsureConnected()
