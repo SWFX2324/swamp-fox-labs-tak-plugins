@@ -51,6 +51,10 @@ cd wintak\OpenMANET
 
 Please don't report security issues in public issues. See [SECURITY.md](SECURITY.md) for how to report them privately and for an overview of how the plugins handle credentials and network traffic.
 
+## License
+
+Released under the [MIT License](LICENSE). The license covers this repository's code; WinTAK and its SDK are licensed separately by their owners.
+
 ## Disclaimer
 
 This is an independent project. It is not affiliated with or endorsed by the TAK Product Center, the developers of WinTAK, or the OpenMANET project. TAK, WinTAK and ATAK are names of their respective owners.
