@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -79,7 +80,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			bool wasPoor = previous?.RssiPoor ?? false;
 			return new NodeStateSnapshot
 			{
-				Name = (string.IsNullOrWhiteSpace(node.Name) ? "Unknown node" : node.Name),
+				Name = node.DisplayName,
 				IsOnline = node.IsOnline,
 				IsDiscovering = node.IsDiscovering,
 				IsRouted = node.IsRouted,
@@ -213,6 +214,8 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 	private readonly string _settingsFilePath;
 
+	private readonly OpenMANET_CallsignStore _callsigns;
+
 	private readonly DispatcherTimer _autoRefreshTimer;
 
 	private readonly DispatcherTimer _throughputTimer;
@@ -294,6 +297,8 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			Dispatcher.ShutdownStarted += Dispatcher_ShutdownStarted;
 			string path = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinTAK", "Plugins", "WinTAK_OpenMANET_Plugin");
 			_settingsFilePath = System.IO.Path.Combine(path, "connection.settings");
+			_callsigns = new OpenMANET_CallsignStore(System.IO.Path.Combine(path, "callsigns.settings"));
+			_callsigns.Load();
 			LoadConnectionSettings();
 			ConnectButton.Click += ConnectButton_Click;
 			RefreshButton.Click += RefreshButton_Click;
@@ -307,6 +312,9 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			NodeBandwidthTrendCanvas.SizeChanged += NodeTrendCanvas_SizeChanged;
 			NodeHopsTrendCanvas.SizeChanged += NodeTrendCanvas_SizeChanged;
 			NodeAgeTrendCanvas.SizeChanged += NodeTrendCanvas_SizeChanged;
+			SaveCallsignButton.Click += SaveCallsignButton_Click;
+			ClearCallsignButton.Click += ClearCallsignButton_Click;
+			CallsignTextBox.KeyDown += CallsignTextBox_KeyDown;
 			ExportDiagnosticsButton.Click += ExportDiagnosticsButton_Click;
 			ExportFullDiagnosticsButton.Click += ExportFullDiagnosticsButton_Click;
 			AllowInsecureHttpCheckBox.Checked += AllowInsecureHttpCheckBox_Changed;
@@ -432,6 +440,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				RefreshButton.Content = "Refreshing...";
 			}
 			List<OpenMANET_NodeInfo> list = await _client.ListNodesAsync(GetOperationToken());
+			ApplyCallsigns(list, _client.LastTopology);
 			UpdateEndpointFailures(_client.LastRefreshFailures);
 			UpdateTopology(_client.LastTopology);
 			UpdateSystemDetails(_client.LastSystemDetails);
@@ -520,6 +529,11 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			}
 		}
 		NodeDetailsPanel.DataContext = openMANET_NodeInfo;
+		// Polls reselect the node every 15 s; don't overwrite a callsign being typed.
+		if (!CallsignTextBox.IsKeyboardFocusWithin)
+		{
+			CallsignTextBox.Text = openMANET_NodeInfo.Callsign ?? string.Empty;
+		}
 		NodeDetailsPlaceholder.Visibility = Visibility.Collapsed;
 		NodeDetailsContent.Visibility = Visibility.Visible;
 		SelectTopologyNode(openMANET_NodeInfo);
@@ -1171,7 +1185,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			}
 			foreach (OpenMANET_NodeInfo lastNode in _lastNodes)
 			{
-				string text = (string.IsNullOrWhiteSpace(lastNode.Name) ? "Unknown node" : lastNode.Name);
+				string text = lastNode.DisplayName;
 				if (!lastNode.IsOnline)
 				{
 					AddHealthFinding(text + (lastNode.IsDiscovering ? " is listed but not reachable yet." : " is stale."), WarningIndicatorBrush, critical: false);
@@ -1407,6 +1421,111 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		return null;
 	}
 
+	private void ApplyCallsigns(List<OpenMANET_NodeInfo> nodes, OpenMANET_TopologyInfo topology)
+	{
+		foreach (OpenMANET_NodeInfo node in nodes)
+		{
+			node.Callsign = _callsigns.Find(new[] { node.MacAddress, node.LinkHardwareAddress }, node.Name);
+		}
+		if (topology == null)
+		{
+			return;
+		}
+		Dictionary<string, OpenMANET_TopologyNodeInfo> byMac = new Dictionary<string, OpenMANET_TopologyNodeInfo>(StringComparer.OrdinalIgnoreCase);
+		foreach (OpenMANET_TopologyNodeInfo topologyNode in topology.Nodes)
+		{
+			List<string> macs = new List<string>(topologyNode.SecondaryMacs) { topologyNode.MacAddress };
+			topologyNode.Callsign = _callsigns.Find(macs, topologyNode.Hostname);
+			foreach (string mac in macs)
+			{
+				if (!string.IsNullOrWhiteSpace(mac))
+				{
+					byMac[mac.Trim()] = topologyNode;
+				}
+			}
+		}
+		foreach (OpenMANET_TopologyEdgeInfo edge in topology.Edges)
+		{
+			if (edge.FromMac != null && byMac.TryGetValue(edge.FromMac.Trim(), out OpenMANET_TopologyNodeInfo from))
+			{
+				edge.FromName = from.NameDisplay;
+			}
+			if (edge.ToMac != null && byMac.TryGetValue(edge.ToMac.Trim(), out OpenMANET_TopologyNodeInfo to))
+			{
+				edge.ToName = to.NameDisplay;
+			}
+		}
+	}
+
+	private void SaveCallsignButton_Click(object sender, RoutedEventArgs e)
+	{
+		SetSelectedNodeCallsign(CallsignTextBox.Text);
+	}
+
+	private void ClearCallsignButton_Click(object sender, RoutedEventArgs e)
+	{
+		SetSelectedNodeCallsign(null);
+	}
+
+	private void CallsignTextBox_KeyDown(object sender, KeyEventArgs e)
+	{
+		if (e.Key == Key.Return)
+		{
+			SetSelectedNodeCallsign(CallsignTextBox.Text);
+			e.Handled = true;
+		}
+	}
+
+	private void SetSelectedNodeCallsign(string callsign)
+	{
+		if (!(NodeDetailsPanel.DataContext is OpenMANET_NodeInfo node))
+		{
+			return;
+		}
+		try
+		{
+			_callsigns.Set(node.MacAddress, node.Name, callsign);
+		}
+		catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException || ex is IOException || ex is UnauthorizedAccessException)
+		{
+			MessageBox.Show(ex.Message, "OpenMANET", MessageBoxButton.OK, MessageBoxImage.Exclamation);
+			return;
+		}
+		string oldName = node.DisplayName;
+		ApplyCallsigns(_lastNodes, _lastTopology);
+		if (!string.Equals(oldName, node.DisplayName, StringComparison.Ordinal))
+		{
+			AddMeshEvent("INFO", node.HasCallsign ? (node.Name + " is now shown as " + node.Callsign + ".") : (oldName + " callsign cleared; showing hostname " + node.DisplayName + "."));
+		}
+		RefreshNodeNameViews(node);
+	}
+
+	/// <summary>Node view models aren't observable, so rebind the views that show names.</summary>
+	private void RefreshNodeNameViews(OpenMANET_NodeInfo selected)
+	{
+		_nodeSelectionInProgress = true;
+		try
+		{
+			NodesListBox.Items.Refresh();
+			LinkQualityNodeComboBox.Items.Refresh();
+			LinkQualityNodeComboBox.SelectedItem = selected;
+		}
+		finally
+		{
+			_nodeSelectionInProgress = false;
+		}
+		NodeDetailsPanel.DataContext = null;
+		NodeDetailsPanel.DataContext = selected;
+		CallsignTextBox.Text = selected.Callsign ?? string.Empty;
+		if (_lastTopology != null)
+		{
+			TopologyContent.DataContext = null;
+			TopologyContent.DataContext = _lastTopology;
+			SelectTopologyNode(selected);
+		}
+		RenderTopology();
+	}
+
 	private static string GetNodeSelectionKey(OpenMANET_NodeInfo node)
 	{
 		if (!string.IsNullOrWhiteSpace(node.MacAddress) && node.MacAddress != "--")
@@ -1420,6 +1539,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	{
 		_selectedNodeKey = null;
 		NodeDetailsPanel.DataContext = null;
+		CallsignTextBox.Text = string.Empty;
 		NodeDetailsContent.Visibility = Visibility.Collapsed;
 		NodeDetailsPlaceholder.Visibility = Visibility.Visible;
 		ClearNodeTrends();
@@ -1844,7 +1964,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		{
 			foreach (OpenMANET_NodeInfo lastNode in _lastNodes)
 			{
-				stringBuilder.AppendLine("- " + (includeOperationalIdentifiers ? DiagnosticText(lastNode.Name ?? "Unknown", includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : openMANET_DiagnosticRedactor.Alias(lastNode.Name ?? lastNode.MacAddress, "Node")) + " | Role=" + lastNode.RoleDisplay + " | Status=" + lastNode.StatusDisplay + " | Address=" + (includeOperationalIdentifiers ? DiagnosticText(lastNode.Address ?? "--", includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : "[redacted]") + " | MAC=" + (includeOperationalIdentifiers ? DiagnosticText(lastNode.MacAddress, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : "[redacted]") + " | Hops=" + lastNode.HopsDisplay + " | RSSI=" + lastNode.RssiDisplay + " | Link=" + lastNode.ThroughputDisplay + " | Route=" + (includeOperationalIdentifiers ? DiagnosticText(lastNode.RouteInterfaceDisplay, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : "[redacted]") + " | LastSeen=" + lastNode.LinkAgeDisplay + " | Routed=" + (lastNode.IsRouted ? "yes" : "no") + " | LiveLink=" + (lastNode.HasLiveLink ? "yes" : "no"));
+				stringBuilder.AppendLine("- " + (includeOperationalIdentifiers ? DiagnosticText(lastNode.Name ?? "Unknown", includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : openMANET_DiagnosticRedactor.Alias(lastNode.Name ?? lastNode.MacAddress, "Node")) + ((includeOperationalIdentifiers && lastNode.HasCallsign) ? (" | Callsign=" + lastNode.Callsign) : string.Empty) + " | Role=" + lastNode.RoleDisplay + " | Status=" + lastNode.StatusDisplay + " | Address=" + (includeOperationalIdentifiers ? DiagnosticText(lastNode.Address ?? "--", includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : "[redacted]") + " | MAC=" + (includeOperationalIdentifiers ? DiagnosticText(lastNode.MacAddress, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : "[redacted]") + " | Hops=" + lastNode.HopsDisplay + " | RSSI=" + lastNode.RssiDisplay + " | Link=" + lastNode.ThroughputDisplay + " | Route=" + (includeOperationalIdentifiers ? DiagnosticText(lastNode.RouteInterfaceDisplay, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : "[redacted]") + " | LastSeen=" + lastNode.LinkAgeDisplay + " | Routed=" + (lastNode.IsRouted ? "yes" : "no") + " | LiveLink=" + (lastNode.HasLiveLink ? "yes" : "no"));
 			}
 		}
 		AppendDiagnosticSection(stringBuilder, "MESH NEIGHBORS (RAW)");
@@ -1946,6 +2066,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		foreach (OpenMANET_NodeInfo lastNode in _lastNodes)
 		{
 			redactor.Alias(lastNode.Name, "Node");
+			redactor.Alias(lastNode.Callsign, "Callsign");
 			redactor.Alias(lastNode.Address, "Node");
 			redactor.Alias(lastNode.MacAddress, "Node");
 			redactor.Alias(lastNode.RemoteGatewayMac, "Node");

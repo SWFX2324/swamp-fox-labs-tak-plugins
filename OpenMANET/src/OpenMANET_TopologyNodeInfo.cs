@@ -26,10 +26,16 @@ internal sealed class OpenMANET_TopologyNodeInfo
 
 	public string RemoteGatewayMac { get; set; }
 
+	public string Callsign { get; set; }
+
 	public string NameDisplay
 	{
 		get
 		{
+			if (!string.IsNullOrWhiteSpace(Callsign))
+			{
+				return Callsign;
+			}
 			if (!string.IsNullOrWhiteSpace(Hostname))
 			{
 				return Hostname;

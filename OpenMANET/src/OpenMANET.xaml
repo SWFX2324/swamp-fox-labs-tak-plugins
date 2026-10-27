@@ -703,10 +703,8 @@
                         <Ellipse Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Bottom" Stroke="{StaticResource SurfaceRaisedBrush}" StrokeThickness="2" Style="{StaticResource StatusDotStyle}" />
                       </Grid>
                       <StackPanel Grid.Column="1" Margin="11,0,8,0" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                        <TextBlock FontSize="10.5" Foreground="{StaticResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0">
-                          <Run Text="{Binding RoleDisplay, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding HopsDisplay, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Address, Mode=OneWay}" />
-                        </TextBlock>
+                        <TextBlock Text="{Binding DisplayName}" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding RowSubtitle}" FontSize="10.5" Foreground="{StaticResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
                       </StackPanel>
                       <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="{Binding LinkQualityStatusDisplay}">
                         <StackPanel Orientation="Horizontal" Height="13" VerticalAlignment="Center">
@@ -1089,12 +1087,12 @@
       <TabItem Header="Nodes">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <StackPanel Margin="8,8,8,4">
-            <ComboBox Name="LinkQualityNodeComboBox" Margin="0,0,0,12" TextSearch.TextPath="Name" HorizontalContentAlignment="Stretch">
+            <ComboBox Name="LinkQualityNodeComboBox" Margin="0,0,0,12" TextSearch.TextPath="DisplayName" HorizontalContentAlignment="Stretch">
               <ComboBox.ItemTemplate>
                 <DataTemplate>
                   <StackPanel Orientation="Horizontal">
                     <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center" Style="{StaticResource StatusDotStyle}" />
-                    <TextBlock Foreground="{StaticResource PrimaryTextBrush}" Text="{Binding Name}" />
+                    <TextBlock Foreground="{StaticResource PrimaryTextBrush}" Text="{Binding DisplayName}" />
                   </StackPanel>
                 </DataTemplate>
               </ComboBox.ItemTemplate>
@@ -1115,7 +1113,7 @@
                       <TextBlock Text="{Binding Initial}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Grid>
                     <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
-                      <TextBlock FontSize="17" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock FontSize="17" FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
                       <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,2,0,0" Text="{Binding StatusDetailDisplay}" />
                     </StackPanel>
                     <Border Grid.Column="2" Style="{StaticResource StatusPillStyle}">
@@ -1164,6 +1162,21 @@
                     </Border>
                   </Grid>
 
+                  <TextBlock Text="CALLSIGN" Style="{StaticResource EyebrowTextStyle}" Margin="0,0,0,8" />
+                  <Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="8" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="6" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Name="CallsignTextBox" MaxLength="24" ToolTip="A display name for this node, shown instead of its hostname. Stored only on this computer." />
+                    <Button Name="SaveCallsignButton" Grid.Column="2" Height="36" Padding="14,0" Style="{StaticResource PrimaryButtonStyle}" Content="Save" />
+                    <Button Name="ClearCallsignButton" Grid.Column="4" Height="36" Padding="12,0" Content="Clear" />
+                  </Grid>
+                  <TextBlock Text="Vanity name shown instead of the hostname. Saved on this computer only." Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,16" />
+
                   <TextBlock Text="IDENTITY" Style="{StaticResource EyebrowTextStyle}" Margin="0,0,0,8" />
                   <Grid Margin="0,0,0,10">
                     <Grid.ColumnDefinitions>
@@ -1174,13 +1187,16 @@
                       <RowDefinition Height="Auto" />
                       <RowDefinition Height="Auto" />
                       <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="Role" Style="{StaticResource LabelTextStyle}" />
-                    <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource ValueTextStyle}" Text="{Binding RoleDisplay}" />
-                    <TextBlock Grid.Row="1" Text="IP address" Style="{StaticResource LabelTextStyle}" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueTextStyle}" Text="{Binding Address}" />
-                    <TextBlock Grid.Row="2" Text="MAC" Style="{StaticResource LabelTextStyle}" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource ValueTextStyle}" Text="{Binding MacAddress}" />
+                    <TextBlock Grid.Row="0" Text="Hostname" Style="{StaticResource LabelTextStyle}" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource ValueTextStyle}" Text="{Binding Name}" />
+                    <TextBlock Grid.Row="1" Text="Role" Style="{StaticResource LabelTextStyle}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueTextStyle}" Text="{Binding RoleDisplay}" />
+                    <TextBlock Grid.Row="2" Text="IP address" Style="{StaticResource LabelTextStyle}" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource ValueTextStyle}" Text="{Binding Address}" />
+                    <TextBlock Grid.Row="3" Text="MAC" Style="{StaticResource LabelTextStyle}" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource ValueTextStyle}" Text="{Binding MacAddress}" />
                   </Grid>
 
                   <TextBlock Text="CONNECTIVITY" Style="{StaticResource EyebrowTextStyle}" Margin="0,0,0,8" />

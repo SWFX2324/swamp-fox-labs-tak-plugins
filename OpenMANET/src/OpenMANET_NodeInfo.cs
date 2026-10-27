@@ -8,6 +8,25 @@ internal sealed class OpenMANET_NodeInfo
 
 	public string Name { get; set; }
 
+	/// <summary>User-assigned vanity name; the hostname stays available as <see cref="Name"/>.</summary>
+	public string Callsign { get; set; }
+
+	public bool HasCallsign => !string.IsNullOrWhiteSpace(Callsign);
+
+	public string DisplayName
+	{
+		get
+		{
+			if (HasCallsign)
+			{
+				return Callsign;
+			}
+			return string.IsNullOrWhiteSpace(Name) ? "Unknown node" : Name;
+		}
+	}
+
+	public string RowSubtitle => (HasCallsign ? (Name + " · ") : string.Empty) + RoleDisplay + " · " + HopsDisplay + " · " + Address;
+
 	public string Address { get; set; }
 
 	public string MacAddress
@@ -119,11 +138,11 @@ internal sealed class OpenMANET_NodeInfo
 	{
 		get
 		{
-			if (string.IsNullOrWhiteSpace(Name))
+			if (string.IsNullOrWhiteSpace(DisplayName))
 			{
 				return "?";
 			}
-			string trimmed = Name.Trim();
+			string trimmed = DisplayName.Trim();
 			char last = trimmed[trimmed.Length - 1];
 			// "Node0" reads better as "0" than "N" when every hostname shares a prefix.
 			return char.IsDigit(last) ? last.ToString() : char.ToUpperInvariant(trimmed[0]).ToString();
