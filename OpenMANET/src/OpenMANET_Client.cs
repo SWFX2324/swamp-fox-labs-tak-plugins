@@ -611,6 +611,12 @@ internal sealed class OpenMANET_Client : IDisposable
 				});
 			}
 		}
+		// ListNodes only returns the other mesh nodes; add the node we're connected to from the topology.
+		OpenMANET_NodeInfo selfNode = CreateSelfNode(topology, list2, utcNow, list.Count);
+		if (selfNode != null)
+		{
+			list2.Insert(0, selfNode);
+		}
 		RemoveMissingTrackedNodes(hashSet2);
 		LastNeighborDiagnostics = BuildNeighborDiagnostics(list, matchedNeighbors);
 		return list2;
@@ -797,6 +803,43 @@ internal sealed class OpenMANET_Client : IDisposable
 		}
 		_everOnlineNodes.IntersectWith(_lastSeenByNode.Keys);
 		_directNeighborNodes.IntersectWith(_lastSeenByNode.Keys);
+	}
+
+	private OpenMANET_NodeInfo CreateSelfNode(MeshTopology topology, List<OpenMANET_NodeInfo> nodes, DateTimeOffset utcNow, int neighborCount)
+	{
+		TopologyNodeResponse self = topology?.Nodes?.Find((TopologyNodeResponse node) => node != null && node.IsSelf);
+		string hostname = self?.Hostname?.Trim();
+		if (string.IsNullOrWhiteSpace(hostname))
+		{
+			hostname = topology?.SelfHostname?.Trim();
+		}
+		string mac = (self?.MacAddress ?? topology?.SelfMac)?.Trim();
+		if (string.IsNullOrWhiteSpace(hostname) && string.IsNullOrWhiteSpace(mac))
+		{
+			return null;
+		}
+		HashSet<string> selfMacs = GetSelfMacs(topology);
+		bool alreadyListed = nodes.Exists((OpenMANET_NodeInfo node) => node.IsSelf || (!string.IsNullOrWhiteSpace(hostname) && string.Equals(node.Name, hostname, StringComparison.OrdinalIgnoreCase)) || selfMacs.Contains(node.MacAddress));
+		if (alreadyListed)
+		{
+			return null;
+		}
+		return new OpenMANET_NodeInfo
+		{
+			Name = string.IsNullOrWhiteSpace(hostname) ? "Local node" : hostname,
+			Address = _httpClient?.BaseAddress?.Host ?? "Local node",
+			MacAddress = string.IsNullOrWhiteSpace(mac) ? "--" : mac,
+			IsOnline = true,
+			IsRouted = true,
+			IsSelf = true,
+			IsGateway = self?.IsGateway ?? false,
+			Segment = self?.Segment,
+			HopsFromSelf = 0,
+			RouteInterface = self?.MyHardInterfaceName,
+			GossipAgeSeconds = 0,
+			LastSuccessfulPollUtc = utcNow,
+			DirectLinkCount = neighborCount
+		};
 	}
 
 	/// <summary>

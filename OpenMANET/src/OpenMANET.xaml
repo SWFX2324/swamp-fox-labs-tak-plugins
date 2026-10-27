@@ -707,6 +707,15 @@
                         <TextBlock Text="{Binding RowSubtitle}" FontSize="10.5" Foreground="{StaticResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
                       </StackPanel>
                       <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="{Binding LinkQualityStatusDisplay}">
+                        <StackPanel.Style>
+                          <Style TargetType="{x:Type StackPanel}">
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsSelf}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </StackPanel.Style>
                         <StackPanel Orientation="Horizontal" Height="13" VerticalAlignment="Center">
                           <Rectangle Height="4">
                             <Rectangle.Style>

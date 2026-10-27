@@ -462,7 +462,8 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			}
 			else if (list.Count > 0)
 			{
-				NodesListBox.SelectedIndex = 0;
+				// Default to a remote node; the local node is listed first but rarely the one of interest.
+				NodesListBox.SelectedItem = list.Find((OpenMANET_NodeInfo node) => !node.IsSelf) ?? list[0];
 			}
 			else
 			{
@@ -1168,9 +1169,9 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				AddHealthFinding("Connection uses insecure HTTP; credentials, the bearer token, and telemetry are not encrypted.", WarningIndicatorBrush, critical: false);
 				flag2 = true;
 			}
-			if (_lastNodes.Count == 0)
+			if (!_lastNodes.Exists((OpenMANET_NodeInfo node) => !node.IsSelf))
 			{
-				AddHealthFinding("No mesh nodes are reporting.", DangerIndicatorBrush, critical: true);
+				AddHealthFinding("No other mesh nodes are reporting.", DangerIndicatorBrush, critical: true);
 				flag = true;
 			}
 			if (_refreshFailureActive)
