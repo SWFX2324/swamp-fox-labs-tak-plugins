@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>WinTAK_OpenMANET_Plugin</AssemblyName>
+    <RootNamespace>WinTAK_OpenMANET_Plugin</RootNamespace>
+    <TargetFramework>net48</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- Override with -p:WinTakDir=... if WinTAK is installed elsewhere -->
+    <WinTakDir Condition="'$(WinTakDir)' == ''">C:\Program Files\WinTAK</WinTakDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.ComponentModel.Composition" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="WinTak.Framework">
+      <HintPath>$(WinTakDir)\WinTak.Framework.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Prism">
+      <HintPath>$(WinTakDir)\Prism.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Prism.Wpf">
+      <HintPath>$(WinTakDir)\Prism.Wpf.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Prism.Mef.Wpf">
+      <HintPath>$(WinTakDir)\Prism.Mef.Wpf.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\OpenMANET_Logo.png" />
+  </ItemGroup>
+</Project>

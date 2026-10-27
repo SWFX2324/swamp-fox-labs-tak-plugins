@@ -1,0 +1,1232 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<UserControl x:Class="WinTAK_OpenMANET_Plugin.OpenMANET" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" MinWidth="320" Background="#00FFFFFF" FontFamily="Segoe UI" xmlns:wintak_openmanet_plugin="clr-namespace:WinTAK_OpenMANET_Plugin;assembly=WinTAK_OpenMANET_Plugin">
+  <FrameworkElement.Resources>
+    <ResourceDictionary>
+      <SolidColorBrush x:Key="AppBackgroundBrush" Color="#141516" />
+      <SolidColorBrush x:Key="SurfaceBrush" Color="#1C1D1F" />
+      <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#242629" />
+      <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#2D3034" />
+      <SolidColorBrush x:Key="BorderBrush" Color="#33363A" />
+      <SolidColorBrush x:Key="BorderStrongBrush" Color="#484C52" />
+      <SolidColorBrush x:Key="AccentBrush" Color="#D6A64A" />
+      <SolidColorBrush x:Key="AccentHoverBrush" Color="#E4B85E" />
+      <SolidColorBrush x:Key="AccentPressedBrush" Color="#B98A35" />
+      <SolidColorBrush x:Key="MetricBrush" Color="#43C7B7" />
+      <SolidColorBrush x:Key="SuccessBrush" Color="#49D17D" />
+      <SolidColorBrush x:Key="WarningBrush" Color="#E1AE4E" />
+      <SolidColorBrush x:Key="DangerBrush" Color="#ED6A6A" />
+      <SolidColorBrush x:Key="PrimaryTextBrush" Color="#F2F2F3" />
+      <SolidColorBrush x:Key="SecondaryTextBrush" Color="#B1B3B7" />
+      <SolidColorBrush x:Key="MutedTextBrush" Color="#797C82" />
+      <Style x:Key="{x:Type TextBlock}" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+      </Style>
+      <Style x:Key="EyebrowTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+      </Style>
+      <Style x:Key="SecondaryTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+      </Style>
+      <Style x:Key="MetricValueTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      </Style>
+      <Style x:Key="CardBorderStyle" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Border.CornerRadius" Value="11" />
+        <Setter Property="Border.Padding" Value="12" />
+      </Style>
+      <Style x:Key="{x:Type GroupBox}" TargetType="{x:Type GroupBox}">
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="Margin" Value="0,0,0,12" />
+        <Setter Property="Padding" Value="12" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="{x:Type GroupBox}">
+              <Border BorderThickness="1" CornerRadius="11" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="1" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+                  <ContentPresenter Grid.Row="0" Margin="14,11,14,10" ContentSource="Header" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" TextElement.Foreground="{StaticResource PrimaryTextBrush}" />
+                  <Border Grid.Row="1" Height="1" Background="{StaticResource BorderBrush}" />
+                  <ContentPresenter Grid.Row="2" Margin="{TemplateBinding Control.Padding}" />
+                </Grid>
+              </Border>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+      <Style x:Key="{x:Type Expander}" TargetType="{x:Type Expander}">
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="10" />
+      </Style>
+      <Style x:Key="{x:Type TabControl}" TargetType="{x:Type TabControl}">
+        <Setter Property="Background" Value="#00FFFFFF" />
+        <Setter Property="BorderThickness" Value="0" />
+      </Style>
+      <Style x:Key="{x:Type TabItem}" TargetType="{x:Type TabItem}">
+        <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+        <Setter Property="Background" Value="#00FFFFFF" />
+        <Setter Property="BorderBrush" Value="#00FFFFFF" />
+        <Setter Property="Padding" Value="11,9" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FrameworkElement.FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="{x:Type TabItem}">
+              <Border Name="TabSurface" Margin="0,0,3,0" Padding="{TemplateBinding Control.Padding}" Background="{TemplateBinding Control.Background}" BorderBrush="{TemplateBinding Control.BorderBrush}" BorderThickness="0,0,0,2" CornerRadius="5,5,0,0">
+                <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" />
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="UIElement.IsMouseOver" Value="True">
+                  <Setter TargetName="TabSurface" Property="Border.Background" Value="{StaticResource SurfaceBrush}" />
+                  <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+                </Trigger>
+                <Trigger Property="TabItem.IsSelected" Value="True">
+                  <Setter TargetName="TabSurface" Property="Border.Background" Value="{StaticResource SurfaceRaisedBrush}" />
+                  <Setter TargetName="TabSurface" Property="Border.BorderBrush" Value="{StaticResource AccentBrush}" />
+                  <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+      <Style x:Key="{x:Type Button}" TargetType="{x:Type Button}">
+        <Setter Property="Foreground" Value="#FFFFFFFF" />
+        <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="12,7" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FrameworkElement.Cursor" Value="Hand" />
+        <Setter Property="FrameworkElement.FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="{x:Type Button}">
+              <Border Name="ButtonSurface" Background="{TemplateBinding Control.Background}" BorderBrush="{TemplateBinding Control.BorderBrush}" BorderThickness="{TemplateBinding Control.BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Control.Padding}">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="UIElement.IsMouseOver" Value="True">
+                  <Setter TargetName="ButtonSurface" Property="UIElement.Opacity" Value="0.88" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                  <Setter TargetName="ButtonSurface" Property="UIElement.Opacity" Value="0.78" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter TargetName="ButtonSurface" Property="UIElement.Opacity" Value="0.42" />
+                  <Setter Property="FrameworkElement.Cursor" Value="Arrow" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+      <Style x:Key="PrimaryButtonStyle" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+        <Setter Property="Foreground" Value="#151515" />
+      </Style>
+      <Style x:Key="{x:Type TextBox}" TargetType="{x:Type TextBox}">
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="TextBoxBase.CaretBrush" Value="{StaticResource PrimaryTextBrush}" />
+      </Style>
+      <Style x:Key="{x:Type PasswordBox}" TargetType="{x:Type PasswordBox}">
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="PasswordBox.CaretBrush" Value="{StaticResource PrimaryTextBrush}" />
+      </Style>
+      <Style x:Key="{x:Type ComboBox}" TargetType="{x:Type ComboBox}">
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="9,6" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="ItemContainerStyle">
+          <Setter.Value>
+            <Style TargetType="{x:Type ComboBoxItem}">
+              <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+              <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+              <Setter Property="Padding" Value="9,7" />
+              <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+              <Setter Property="Template">
+                <Setter.Value>
+                  <ControlTemplate TargetType="{x:Type ComboBoxItem}">
+                    <Border Name="ItemBorder" Background="{TemplateBinding Control.Background}" Padding="{TemplateBinding Control.Padding}">
+                      <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                      <Trigger Property="ComboBoxItem.IsHighlighted" Value="True">
+                        <Setter TargetName="ItemBorder" Property="Border.Background" Value="{StaticResource SurfaceHoverBrush}" />
+                      </Trigger>
+                      <Trigger Property="ListBoxItem.IsSelected" Value="True">
+                        <Setter TargetName="ItemBorder" Property="Border.Background" Value="#32302A" />
+                        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+                      </Trigger>
+                    </ControlTemplate.Triggers>
+                  </ControlTemplate>
+                </Setter.Value>
+              </Setter>
+            </Style>
+          </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="{x:Type ComboBox}">
+              <Grid>
+                <Border Name="ComboSurface" Background="{TemplateBinding Control.Background}" BorderBrush="{TemplateBinding Control.BorderBrush}" BorderThickness="{TemplateBinding Control.BorderThickness}" CornerRadius="6" />
+                <ContentPresenter Margin="10,0,34,0" VerticalAlignment="Center" HorizontalAlignment="Left" IsHitTestVisible="False" TextElement.Foreground="{TemplateBinding Control.Foreground}" Content="{TemplateBinding ComboBox.SelectionBoxItem}" ContentTemplate="{TemplateBinding ComboBox.SelectionBoxItemTemplate}" ContentStringFormat="{TemplateBinding ComboBox.SelectionBoxItemStringFormat}" />
+                <ToggleButton Focusable="False" ClickMode="Press" Background="#00FFFFFF" BorderThickness="0" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                  <Control.Template>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                      <Grid Background="#00FFFFFF">
+                        <Path Width="8" Height="5" Margin="0,0,12,0" HorizontalAlignment="Right" VerticalAlignment="Center" Data="M0,0 L8,0 L4,5" Fill="{StaticResource SecondaryTextBrush}" />
+                      </Grid>
+                    </ControlTemplate>
+                  </Control.Template>
+                </ToggleButton>
+                <Popup Name="PART_Popup" Placement="Bottom" AllowsTransparency="True" Focusable="False" IsOpen="{TemplateBinding ComboBox.IsDropDownOpen}">
+                  <Border Margin="0,4,0,0" MaxHeight="260" BorderThickness="1" CornerRadius="6" Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource BorderStrongBrush}" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                    <ScrollViewer>
+                      <ItemsPresenter />
+                    </ScrollViewer>
+                  </Border>
+                </Popup>
+              </Grid>
+              <ControlTemplate.Triggers>
+                <Trigger Property="UIElement.IsMouseOver" Value="True">
+                  <Setter TargetName="ComboSurface" Property="Border.BorderBrush" Value="{StaticResource AccentBrush}" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter TargetName="ComboSurface" Property="UIElement.Opacity" Value="0.45" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+      <Style x:Key="{x:Type ListBox}" TargetType="{x:Type ListBox}">
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="Background" Value="#00FFFFFF" />
+        <Setter Property="BorderThickness" Value="0" />
+      </Style>
+      <Style x:Key="{x:Type ListBoxItem}" TargetType="{x:Type ListBoxItem}">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="Background" Value="#00FFFFFF" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="0,0,0,6" />
+        <Setter Property="FrameworkElement.FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="{x:Type ListBoxItem}">
+              <Border Name="ItemSurface" Background="{TemplateBinding Control.Background}" BorderBrush="#00FFFFFF" BorderThickness="1" CornerRadius="7">
+                <ContentPresenter />
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="UIElement.IsMouseOver" Value="True">
+                  <Setter TargetName="ItemSurface" Property="Border.Background" Value="{StaticResource SurfaceHoverBrush}" />
+                </Trigger>
+                <Trigger Property="ListBoxItem.IsSelected" Value="True">
+                  <Setter TargetName="ItemSurface" Property="Border.Background" Value="#32302A" />
+                  <Setter TargetName="ItemSurface" Property="Border.BorderBrush" Value="{StaticResource AccentBrush}" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+      <Style x:Key="{x:Type ProgressBar}" TargetType="{x:Type ProgressBar}">
+        <Setter Property="Height" Value="6" />
+        <Setter Property="Foreground" Value="{StaticResource MetricBrush}" />
+        <Setter Property="Background" Value="#28333D" />
+        <Setter Property="BorderThickness" Value="0" />
+      </Style>
+      <Style x:Key="MetricProgressBarStyle" TargetType="{x:Type ProgressBar}" BasedOn="{StaticResource {x:Type ProgressBar}}">
+        <Setter Property="Height" Value="8" />
+        <Setter Property="RangeBase.Minimum" Value="0" />
+        <Setter Property="RangeBase.Maximum" Value="100" />
+        <Setter Property="Background" Value="#2A2D30" />
+      </Style>
+    </ResourceDictionary>
+  </FrameworkElement.Resources>
+  <Grid Background="{StaticResource AppBackgroundBrush}">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="64" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+    <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,10">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="40" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <Border Width="34" Height="34" CornerRadius="7" Background="#2B2C2E" VerticalAlignment="Center">
+          <Image Source="Assets/OpenMANET_Logo.png" Width="26" Height="26" Stretch="Uniform" />
+        </Border>
+        <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+          <TextBlock Text="OpenMANET" FontSize="17" FontWeight="SemiBold" />
+          <TextBlock Text="Mesh transport awareness" Style="{StaticResource SecondaryTextStyle}" FontSize="11" Margin="0,2,0,0" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center" HorizontalAlignment="Right">
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Ellipse Name="ConnectionStatusIndicator" Width="8" Height="8" Fill="#FF808080" Margin="0,0,7,0" VerticalAlignment="Center" />
+            <TextBlock Name="ConnectionStatusText" Text="Not Connected" FontSize="11" FontWeight="SemiBold" />
+          </StackPanel>
+          <TextBlock Text="TRANSPORT" Margin="0,3,0,0" HorizontalAlignment="Right" Style="{StaticResource EyebrowTextStyle}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+    <TabControl Name="MainTabControl" Grid.Row="1" Margin="12,8,12,12">
+      <TabItem Header="Dashboard">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="8">
+            <GroupBox Header="Mesh Nodes">
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="1" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="220" />
+                </Grid.RowDefinitions>
+                <Grid Margin="2,0,2,10">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="ACTIVE " Style="{StaticResource EyebrowTextStyle}" VerticalAlignment="Center" />
+                    <TextBlock Name="NodeCountText" Text="0" Foreground="{StaticResource MetricBrush}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <TextBlock Text="LAST POLL " Style="{StaticResource EyebrowTextStyle}" VerticalAlignment="Center" />
+                    <TextBlock Name="LastPollText" Text="Never" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+                <Border Grid.Row="1" Height="1" Background="{StaticResource BorderBrush}" />
+                <Grid Grid.Row="2" Margin="8,9,18,7">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.65*" />
+                    <ColumnDefinition Width="1.05*" />
+                    <ColumnDefinition Width="0.95*" />
+                    <ColumnDefinition Width="0.55*" />
+                    <ColumnDefinition Width="0.85*" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="NODE" Style="{StaticResource EyebrowTextStyle}" />
+                  <TextBlock Grid.Column="1" Text="ROLE" Style="{StaticResource EyebrowTextStyle}" />
+                  <TextBlock Grid.Column="2" Text="STATUS" Style="{StaticResource EyebrowTextStyle}" />
+                  <TextBlock Grid.Column="3" Text="HOP" Style="{StaticResource EyebrowTextStyle}" HorizontalAlignment="Center" />
+                  <TextBlock Grid.Column="4" Text="RSSI" Style="{StaticResource EyebrowTextStyle}" HorizontalAlignment="Right" />
+                </Grid>
+                <ListBox Name="NodesListBox" Grid.Row="3" Margin="0" BorderThickness="0" ScrollViewer.VerticalScrollBarVisibility="Visible" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Padding="8,8" Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.65*" />
+                            <ColumnDefinition Width="1.05*" />
+                            <ColumnDefinition Width="0.95*" />
+                            <ColumnDefinition Width="0.55*" />
+                            <ColumnDefinition Width="0.85*" />
+                          </Grid.ColumnDefinitions>
+                          <TextBlock FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Text="{Binding Name}" />
+                          <TextBlock Grid.Column="1" FontSize="10" Foreground="{StaticResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Text="{Binding RoleDisplay}" />
+                          <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="7" Height="7" Margin="0,0,5,0">
+                              <FrameworkElement.Style>
+                                <Style TargetType="{x:Type Ellipse}">
+                                  <Setter Property="Fill" Value="{StaticResource WarningBrush}" />
+                                  <Style.Triggers>
+                                    <DataTrigger Value="True" Binding="{Binding IsOnline}">
+                                      <Setter Property="Fill" Value="{StaticResource SuccessBrush}" />
+                                    </DataTrigger>
+                                  </Style.Triggers>
+                                </Style>
+                              </FrameworkElement.Style>
+                            </Ellipse>
+                            <TextBlock FontSize="10" TextTrimming="CharacterEllipsis" Text="{Binding StatusDisplay}" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="3" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" Text="{Binding HopsDisplay}" />
+                          <TextBlock Grid.Column="4" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource MetricBrush}" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding RssiDisplay}" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ListBox>
+              </Grid>
+            </GroupBox>
+            <GroupBox Header="Mesh Bandwidth">
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="140" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid Margin="2,0,2,10">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="CURRENT MESH BANDWIDTH" Style="{StaticResource EyebrowTextStyle}" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <TextBlock Name="BandwidthCurrentValueText" Text="—" Foreground="#A78BFA" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text=" Mbps" Margin="3,0,0,1" Foreground="{StaticResource SecondaryTextBrush}" FontSize="11" VerticalAlignment="Bottom" />
+                  </StackPanel>
+                </Grid>
+                <Border Grid.Row="1" Background="#171819" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+                  <Grid Margin="10">
+                    <Grid>
+                      <Grid.RowDefinitions>
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                      </Grid.RowDefinitions>
+                      <Border Grid.Row="0" Height="1" Background="#2A2D30" VerticalAlignment="Top" />
+                      <Border Grid.Row="1" Height="1" Background="#2A2D30" VerticalAlignment="Top" />
+                      <Border Grid.Row="2" Height="1" Background="#2A2D30" VerticalAlignment="Top" />
+                      <Border Grid.Row="3" Height="1" Background="#2A2D30" VerticalAlignment="Bottom" />
+                    </Grid>
+                    <Canvas Name="BandwidthChartCanvas" Background="#00FFFFFF" ClipToBounds="True">
+                      <Polyline Name="BandwidthLine" Stroke="#A78BFA" StrokeThickness="2.25" StrokeLineJoin="Round" />
+                      <Ellipse Name="BandwidthMarker" Width="6" Height="6" Fill="#A78BFA" Visibility="Collapsed" />
+                    </Canvas>
+                    <StackPanel Name="BandwidthEmptyState" HorizontalAlignment="Center" VerticalAlignment="Center">
+                      <TextBlock Name="BandwidthStatusText" Text="Connect to begin sampling" Foreground="{StaticResource SecondaryTextBrush}" FontSize="11" HorizontalAlignment="Center" />
+                      <TextBlock Text="Conservative direct-link capacity" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}" FontSize="10" HorizontalAlignment="Center" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+                <Grid Grid.Row="2" Margin="2,8,2,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Grid.Column="0" Text="60-second rolling window" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Ellipse Width="7" Height="7" Fill="#A78BFA" VerticalAlignment="Center" />
+                    <TextBlock Text="ESTIMATED" Margin="4,0,0,0" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
+                  </StackPanel>
+                  <TextBlock Grid.Column="2" Text="Mbps" Foreground="{StaticResource MutedTextBrush}" FontSize="10" HorizontalAlignment="Right" />
+                </Grid>
+              </Grid>
+            </GroupBox>
+            <GroupBox Header="Mesh Throughput">
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="140" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid Margin="2,0,2,10">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="CURRENT MESH THROUGHPUT" Style="{StaticResource EyebrowTextStyle}" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <TextBlock Name="ThroughputCurrentValueText" Text="—" Foreground="{StaticResource MetricBrush}" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text=" Mbps" Margin="3,0,0,1" Foreground="{StaticResource SecondaryTextBrush}" FontSize="11" VerticalAlignment="Bottom" />
+                  </StackPanel>
+                </Grid>
+                <Border Grid.Row="1" Background="#171819" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+                  <Grid Margin="10">
+                    <Grid>
+                      <Grid.RowDefinitions>
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                      </Grid.RowDefinitions>
+                      <Border Grid.Row="0" Height="1" Background="#2A2D30" VerticalAlignment="Top" />
+                      <Border Grid.Row="1" Height="1" Background="#2A2D30" VerticalAlignment="Top" />
+                      <Border Grid.Row="2" Height="1" Background="#2A2D30" VerticalAlignment="Top" />
+                      <Border Grid.Row="3" Height="1" Background="#2A2D30" VerticalAlignment="Bottom" />
+                    </Grid>
+                    <Canvas Name="ThroughputChartCanvas" Background="#00FFFFFF" ClipToBounds="True">
+                      <Polyline Name="ThroughputRxLine" Stroke="#43C7B7" StrokeThickness="2.25" StrokeLineJoin="Round" />
+                      <Polyline Name="ThroughputTxLine" Stroke="#D6A64A" StrokeThickness="2.25" StrokeLineJoin="Round" />
+                      <Ellipse Name="ThroughputRxMarker" Width="6" Height="6" Fill="#43C7B7" Visibility="Collapsed" />
+                      <Ellipse Name="ThroughputTxMarker" Width="6" Height="6" Fill="#D6A64A" Visibility="Collapsed" />
+                    </Canvas>
+                    <StackPanel Name="ThroughputEmptyState" HorizontalAlignment="Center" VerticalAlignment="Center">
+                      <TextBlock Name="ThroughputStatusText" Text="Connect to begin sampling" Foreground="{StaticResource SecondaryTextBrush}" FontSize="11" HorizontalAlignment="Center" />
+                      <TextBlock Text="Actual HaLow RX and TX traffic" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}" FontSize="10" HorizontalAlignment="Center" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+                <Grid Grid.Row="2" Margin="2,8,2,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Grid.Column="0" Text="60-second rolling window" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Ellipse Width="7" Height="7" Fill="#43C7B7" VerticalAlignment="Center" />
+                    <TextBlock Text="RX" Margin="4,0,10,0" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
+                    <Ellipse Width="7" Height="7" Fill="#D6A64A" VerticalAlignment="Center" />
+                    <TextBlock Text="TX" Margin="4,0,0,0" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
+                  </StackPanel>
+                  <TextBlock Grid.Column="2" Text="Mbps" Foreground="{StaticResource MutedTextBrush}" FontSize="10" HorizontalAlignment="Right" />
+                </Grid>
+                <Border Grid.Row="3" Margin="2,12,2,0" Padding="10" Background="{StaticResource SurfaceRaisedBrush}" CornerRadius="7">
+                  <StackPanel>
+                    <Grid Margin="0,0,0,7">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Text="ESTIMATED MESH UTILIZATION" Style="{StaticResource EyebrowTextStyle}" />
+                      <TextBlock Name="UtilizationCurrentValueText" Grid.Column="1" Text="—" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource MetricBrush}" />
+                    </Grid>
+                    <ProgressBar Name="UtilizationProgressBar" Style="{StaticResource MetricProgressBarStyle}" Value="0" />
+                    <TextBlock Name="UtilizationStatusText" Text="Waiting for bandwidth and throughput samples" Margin="0,6,0,0" Foreground="{StaticResource MutedTextBrush}" FontSize="10" TextWrapping="Wrap" />
+                  </StackPanel>
+                </Border>
+              </Grid>
+            </GroupBox>
+            <GroupBox Header="Mesh Events">
+              <Grid>
+                <ListBox Name="MeshEventsListBox" Height="180" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Padding="8" Margin="0,0,0,5" Background="#171819" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="7">
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="58" />
+                            <ColumnDefinition Width="62" />
+                            <ColumnDefinition Width="*" />
+                          </Grid.ColumnDefinitions>
+                          <TextBlock FontSize="10" Foreground="{StaticResource MutedTextBrush}" Text="{Binding TimeDisplay}" />
+                          <TextBlock Grid.Column="1" FontSize="9" FontWeight="SemiBold" Text="{Binding SeverityDisplay}">
+                            <FrameworkElement.Style>
+                              <Style TargetType="{x:Type TextBlock}">
+                                <Setter Property="Foreground" Value="{StaticResource MetricBrush}" />
+                                <Style.Triggers>
+                                  <DataTrigger Value="WARNING" Binding="{Binding SeverityDisplay}">
+                                    <Setter Property="Foreground" Value="{StaticResource WarningBrush}" />
+                                  </DataTrigger>
+                                  <DataTrigger Value="CRITICAL" Binding="{Binding SeverityDisplay}">
+                                    <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
+                                  </DataTrigger>
+                                </Style.Triggers>
+                              </Style>
+                            </FrameworkElement.Style>
+                          </TextBlock>
+                          <TextBlock Grid.Column="2" FontSize="10" TextWrapping="Wrap" Text="{Binding Message}" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ListBox>
+                <StackPanel Name="MeshEventsEmptyState" HorizontalAlignment="Center" VerticalAlignment="Center">
+                  <TextBlock Text="No mesh events recorded" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                  <TextBlock Text="State changes will appear here" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}" FontSize="10" HorizontalAlignment="Center" />
+                </StackPanel>
+              </Grid>
+            </GroupBox>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+      <TabItem Header="Topology">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <Grid Margin="8">
+            <TextBlock Name="TopologyPlaceholder" Margin="10" Text="Connect to OpenMANET to view the live mesh topology." Opacity="0.65" TextWrapping="Wrap" />
+            <StackPanel Name="TopologyContent" Visibility="Collapsed">
+              <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,10">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="MESH HEALTH" Style="{StaticResource EyebrowTextStyle}" />
+                    <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding HealthDisplay}">
+                      <FrameworkElement.Style>
+                        <Style TargetType="{x:Type TextBlock}">
+                          <Setter Property="Foreground" Value="#FFFF6347" />
+                          <Style.Triggers>
+                            <DataTrigger Value="Healthy" Binding="{Binding HealthDisplay}">
+                              <Setter Property="Foreground" Value="#FF32CD32" />
+                            </DataTrigger>
+                            <DataTrigger Value="Degraded" Binding="{Binding HealthDisplay}">
+                              <Setter Property="Foreground" Value="#FFDAA520" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </FrameworkElement.Style>
+                    </TextBlock>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Margin="12,0,0,0" HorizontalAlignment="Right">
+                    <TextBlock Text="ALGORITHM" Style="{StaticResource EyebrowTextStyle}" HorizontalAlignment="Right" />
+                    <TextBlock FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Right" Text="{Binding AlgorithmDisplay}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="8" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="8" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="9">
+                  <StackPanel>
+                    <TextBlock Text="NODES" FontSize="9" Opacity="0.6" />
+                    <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding Nodes.Count}" />
+                  </StackPanel>
+                </Border>
+                <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource CardBorderStyle}" Padding="9">
+                  <StackPanel>
+                    <TextBlock Text="DIRECT LINKS" FontSize="9" Opacity="0.6" />
+                    <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding DirectLinkCount}" />
+                  </StackPanel>
+                </Border>
+                <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="9">
+                  <StackPanel>
+                    <TextBlock Text="BLOS LINKS" FontSize="9" Opacity="0.6" />
+                    <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="#FFFF8C00" Text="{Binding BlosLinkCount}" />
+                  </StackPanel>
+                </Border>
+                <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource CardBorderStyle}" Padding="9">
+                  <StackPanel>
+                    <TextBlock Text="GOSSIP COVERAGE" FontSize="9" Opacity="0.6" />
+                    <TextBlock FontSize="14" FontWeight="SemiBold" Text="{Binding GossipCoverageDisplay}" />
+                  </StackPanel>
+                </Border>
+              </Grid>
+              <GroupBox Header="Live Topology" Margin="0,0,0,10" Padding="0">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="1" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="1" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+                  <Grid Grid.Row="0" Margin="12,11,12,10">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                      <TextBlock Text="NETWORK MAP" Style="{StaticResource EyebrowTextStyle}" />
+                      <TextBlock Text="Live paths from the local node" Margin="0,3,0,0" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
+                    </StackPanel>
+                    <Border Grid.Column="1" Padding="8,4" Background="#1B3327" BorderBrush="#315C43" BorderThickness="1" CornerRadius="10" VerticalAlignment="Center">
+                      <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="6" Height="6" Fill="{StaticResource SuccessBrush}" Margin="0,0,5,0" VerticalAlignment="Center" />
+                        <TextBlock Text="LIVE" Foreground="{StaticResource SuccessBrush}" FontSize="9" FontWeight="SemiBold" />
+                      </StackPanel>
+                    </Border>
+                  </Grid>
+                  <Border Grid.Row="1" Background="{StaticResource BorderBrush}" />
+                  <Border Grid.Row="2" Margin="10" Background="#171819" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="9" ClipToBounds="True">
+                    <Grid>
+                      <Panel.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                          <GradientStop Color="#1B1D1F" Offset="0" />
+                          <GradientStop Color="#151617" Offset="1" />
+                        </LinearGradientBrush>
+                      </Panel.Background>
+                      <Canvas Name="TopologyCanvas" Height="250" MinWidth="220" Background="#00FFFFFF" />
+                    </Grid>
+                  </Border>
+                  <Border Grid.Row="3" Background="{StaticResource BorderBrush}" />
+                  <Grid Grid.Row="4" Margin="12,9,12,10">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <WrapPanel>
+                      <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
+                        <Border Width="13" Height="8" Background="{StaticResource SuccessBrush}" CornerRadius="2" Margin="0,0,5,0" />
+                        <TextBlock Text="Local" FontSize="9" Foreground="{StaticResource SecondaryTextBrush}" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
+                        <Border Width="13" Height="8" Background="{StaticResource MetricBrush}" CornerRadius="2" Margin="0,0,5,0" />
+                        <TextBlock Text="Gateway" FontSize="9" Foreground="{StaticResource SecondaryTextBrush}" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal">
+                        <Border Width="13" Height="8" Background="#59616A" CornerRadius="2" Margin="0,0,5,0" />
+                        <TextBlock Text="Mesh node" FontSize="9" Foreground="{StaticResource SecondaryTextBrush}" />
+                      </StackPanel>
+                    </WrapPanel>
+                    <WrapPanel Grid.Column="1" Margin="8,0,0,0" HorizontalAlignment="Right">
+                      <StackPanel Orientation="Horizontal" Margin="0,0,10,0">
+                        <Rectangle Width="14" Height="2" Fill="{StaticResource SuccessBrush}" Margin="0,0,5,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Path" FontSize="9" Foreground="{StaticResource MutedTextBrush}" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal">
+                        <Rectangle Width="14" Height="2" Fill="{StaticResource WarningBrush}" Margin="0,0,5,0" VerticalAlignment="Center" />
+                        <TextBlock Text="BLOS" FontSize="9" Foreground="{StaticResource MutedTextBrush}" />
+                      </StackPanel>
+                    </WrapPanel>
+                  </Grid>
+                </Grid>
+              </GroupBox>
+              <GroupBox Header="Nodes" Margin="0,0,0,10">
+                <ListBox Name="TopologyNodesListBox" Margin="6" BorderThickness="0" ItemsSource="{Binding Nodes}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Padding="9" Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="7">
+                        <StackPanel>
+                          <Grid>
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="*" />
+                              <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Text="{Binding NameDisplay}" />
+                            <TextBlock Grid.Column="1" FontSize="10" Opacity="0.7" Margin="8,0,0,0" Text="{Binding RoleDisplay}" />
+                          </Grid>
+                          <TextBlock Margin="0,3,0,0" FontSize="10" Opacity="0.7">
+                            <Run Text="{Binding HopsDisplay, Mode=OneWay}" /> <Run Text=" · " /> <Run Text="{Binding RouteDisplay, Mode=OneWay}" /> <Run Text=" · " /> <Run Text="{Binding SegmentDisplay, Mode=OneWay}" /></TextBlock>
+                          <TextBlock Margin="0,2,0,0" FontSize="10" Opacity="0.65" Text="{Binding GossipDisplay}" />
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ListBox>
+              </GroupBox>
+              <GroupBox Header="Links">
+                <ItemsControl Margin="6" ItemsSource="{Binding Edges}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Margin="0,0,0,6" Padding="9" Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="7">
+                        <StackPanel>
+                          <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding LinkDisplay}" />
+                          <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="*" />
+                              <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock FontSize="10" Opacity="0.7">
+                              <Run Text="{Binding TypeDisplay, Mode=OneWay}" /> <Run Text=" · Metric " /> <Run Text="{Binding MetricDisplay, Mode=OneWay}" /></TextBlock>
+                            <TextBlock Grid.Column="1" FontSize="10" Margin="8,0,0,0" Text="{Binding PathDisplay}">
+                              <FrameworkElement.Style>
+                                <Style TargetType="{x:Type TextBlock}">
+                                  <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+                                  <Style.Triggers>
+                                    <DataTrigger Value="True" Binding="{Binding IsOnMyPath}">
+                                      <Setter Property="Foreground" Value="#FF32CD32" />
+                                    </DataTrigger>
+                                    <DataTrigger Value="True" Binding="{Binding IsBlos}">
+                                      <Setter Property="Foreground" Value="#FFFF8C00" />
+                                    </DataTrigger>
+                                  </Style.Triggers>
+                                </Style>
+                              </FrameworkElement.Style>
+                            </TextBlock>
+                          </Grid>
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </GroupBox>
+              <TextBlock Margin="2,8,0,0" FontSize="10" Opacity="0.6">
+                <Run Text="Snapshot collected " /> <Run Text="{Binding CollectedAtDisplay, Mode=OneWay}" /></TextBlock>
+            </StackPanel>
+          </Grid>
+        </ScrollViewer>
+      </TabItem>
+      <TabItem Header="Nodes">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="8">
+            <GroupBox Header="Node Selection" Margin="0,0,0,10">
+              <Grid Margin="10">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="10" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Node" VerticalAlignment="Center" Opacity="0.7" />
+                <ComboBox Name="LinkQualityNodeComboBox" Grid.Column="2" MinWidth="160" TextSearch.TextPath="Name" HorizontalContentAlignment="Stretch">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Foreground="{StaticResource PrimaryTextBrush}" Text="{Binding Name}" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ComboBox>
+              </Grid>
+            </GroupBox>
+            <GroupBox Name="NodeDetailsPanel" Header="Selected Node" Margin="0">
+              <Grid Margin="10">
+                <TextBlock Name="NodeDetailsPlaceholder" Text="Select a node above to view link quality." Opacity="0.65" TextWrapping="Wrap" />
+                <StackPanel Name="NodeDetailsContent" Visibility="Collapsed">
+                  <TextBlock FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" Text="{Binding Name}" />
+                  <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,14">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <StackPanel>
+                        <TextBlock Text="LINK QUALITY" Style="{StaticResource EyebrowTextStyle}" />
+                        <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding LinkQualityStatusDisplay}">
+                          <FrameworkElement.Style>
+                            <Style TargetType="{x:Type TextBlock}">
+                              <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+                              <Style.Triggers>
+                                <DataTrigger Value="Excellent" Binding="{Binding LinkQualityStatusDisplay}">
+                                  <Setter Property="Foreground" Value="#FF32CD32" />
+                                </DataTrigger>
+                                <DataTrigger Value="Good" Binding="{Binding LinkQualityStatusDisplay}">
+                                  <Setter Property="Foreground" Value="#8BD450" />
+                                </DataTrigger>
+                                <DataTrigger Value="Fair" Binding="{Binding LinkQualityStatusDisplay}">
+                                  <Setter Property="Foreground" Value="#FFDAA520" />
+                                </DataTrigger>
+                                <DataTrigger Value="Poor" Binding="{Binding LinkQualityStatusDisplay}">
+                                  <Setter Property="Foreground" Value="#FFFF6347" />
+                                </DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </FrameworkElement.Style>
+                        </TextBlock>
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Margin="12,0,0,0" HorizontalAlignment="Right">
+                        <TextBlock Text="AVERAGE RSSI" Style="{StaticResource EyebrowTextStyle}" HorizontalAlignment="Right" />
+                        <TextBlock FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Right" Text="{Binding RssiDisplay}" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                  <TextBlock Text="Identity" FontSize="12" FontWeight="SemiBold" Opacity="0.8" Margin="0,0,0,6" />
+                  <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="105" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Role" Opacity="0.65" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" TextWrapping="Wrap" Text="{Binding RoleDisplay}" />
+                    <TextBlock Grid.Row="1" Text="IP Address" Opacity="0.65" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" TextWrapping="Wrap" Text="{Binding Address}" />
+                    <TextBlock Grid.Row="2" Text="MAC" Opacity="0.65" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" TextWrapping="Wrap" Text="{Binding MacAddress}" />
+                  </Grid>
+                  <TextBlock Text="Connectivity" FontSize="12" FontWeight="SemiBold" Opacity="0.8" Margin="0,0,0,6" />
+                  <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="105" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Status" Opacity="0.65" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" FontWeight="SemiBold" Text="{Binding StatusDisplay}">
+                      <FrameworkElement.Style>
+                        <Style TargetType="{x:Type TextBlock}">
+                          <Setter Property="Foreground" Value="#FFDAA520" />
+                          <Style.Triggers>
+                            <DataTrigger Value="True" Binding="{Binding IsOnline}">
+                              <Setter Property="Foreground" Value="#FF32CD32" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </FrameworkElement.Style>
+                    </TextBlock>
+                    <TextBlock Grid.Row="1" Text="Segment" Opacity="0.65" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SegmentDisplay}" />
+                    <TextBlock Grid.Row="2" Text="Hops" Opacity="0.65" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HopsDisplay}" />
+                    <TextBlock Grid.Row="3" Text="Route" Opacity="0.65" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding RouteInterfaceDisplay}" />
+                    <TextBlock Grid.Row="4" Text="Path Type" Opacity="0.65" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" FontWeight="SemiBold" Text="{Binding PathTypeDisplay}">
+                      <FrameworkElement.Style>
+                        <Style TargetType="{x:Type TextBlock}">
+                          <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+                          <Style.Triggers>
+                            <DataTrigger Value="BLOS" Binding="{Binding PathTypeDisplay}">
+                              <Setter Property="Foreground" Value="#FFFF8C00" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </FrameworkElement.Style>
+                    </TextBlock>
+                    <TextBlock Grid.Row="5" Text="Last Poll" Opacity="0.65" />
+                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding LastPollDisplay}" />
+                  </Grid>
+                  <TextBlock Text="Link Quality" FontSize="12" FontWeight="SemiBold" Opacity="0.8" Margin="0,0,0,6" />
+                  <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="105" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Average RSSI" Opacity="0.65" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" FontWeight="SemiBold" Text="{Binding RssiDisplay}" />
+                    <TextBlock Grid.Row="1" Text="Current RSSI" Opacity="0.65" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CurrentRssiDisplay}" />
+                    <TextBlock Grid.Row="2" Text="TX Throughput" Opacity="0.65" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ThroughputDisplay}" />
+                    <TextBlock Grid.Row="3" Text="Last Seen" Opacity="0.65" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding LinkAgeDisplay}" />
+                    <TextBlock Grid.Row="4" Text="Interface" Opacity="0.65" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding LinkInterfaceDisplay}" />
+                    <TextBlock Grid.Row="5" Text="Link MAC" Opacity="0.65" />
+                    <TextBlock Grid.Row="5" Grid.Column="1" TextWrapping="Wrap" Text="{Binding LinkHardwareAddressDisplay}" />
+                    <TextBlock Grid.Row="6" Text="Direct Links" Opacity="0.65" />
+                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding DirectLinkCountDisplay}" />
+                  </Grid>
+                  <TextBlock Text="Mesh Health" FontSize="12" FontWeight="SemiBold" Opacity="0.8" Margin="0,0,0,6" />
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="105" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Topology Status" Opacity="0.65" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" FontWeight="SemiBold" Text="{Binding TopologyStatusDisplay}">
+                      <FrameworkElement.Style>
+                        <Style TargetType="{x:Type TextBlock}">
+                          <Setter Property="Foreground" Value="#FFFF6347" />
+                          <Style.Triggers>
+                            <DataTrigger Value="Healthy" Binding="{Binding TopologyStatusDisplay}">
+                              <Setter Property="Foreground" Value="#FF32CD32" />
+                            </DataTrigger>
+                            <DataTrigger Value="Degraded" Binding="{Binding TopologyStatusDisplay}">
+                              <Setter Property="Foreground" Value="#FFDAA520" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </FrameworkElement.Style>
+                    </TextBlock>
+                    <TextBlock Grid.Row="1" Text="Topology Age" Opacity="0.65" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TopologyAgeDisplay}" />
+                    <TextBlock Grid.Row="2" Text="Remote Gateway" Opacity="0.65" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" TextWrapping="Wrap" Text="{Binding RemoteGatewayDisplay}" />
+                  </Grid>
+                  <TextBlock Text="60 Minute Trends" FontSize="12" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,6" />
+                  <Border Padding="10" Background="#171819" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+                    <StackPanel>
+                      <TextBlock Name="NodeTrendStatusText" Text="Trend history begins after the first refresh" Margin="0,0,0,8" Foreground="{StaticResource MutedTextBrush}" FontSize="10" TextWrapping="Wrap" />
+                      <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="88" />
+                          <ColumnDefinition Width="*" />
+                          <ColumnDefinition Width="58" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="RSSI" FontSize="10" VerticalAlignment="Center" />
+                        <Canvas Name="NodeRssiTrendCanvas" Grid.Column="1" Height="34" Background="#202224" ClipToBounds="True">
+                          <Polyline Name="NodeRssiTrendLine" Stroke="{StaticResource MetricBrush}" StrokeThickness="2" />
+                        </Canvas>
+                        <TextBlock Name="NodeRssiTrendValueText" Grid.Column="2" Text="—" Margin="8,0,0,0" FontSize="10" Foreground="{StaticResource MetricBrush}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                      </Grid>
+                      <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="88" />
+                          <ColumnDefinition Width="*" />
+                          <ColumnDefinition Width="58" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Bandwidth" FontSize="10" VerticalAlignment="Center" />
+                        <Canvas Name="NodeBandwidthTrendCanvas" Grid.Column="1" Height="34" Background="#202224" ClipToBounds="True">
+                          <Polyline Name="NodeBandwidthTrendLine" Stroke="#A78BFA" StrokeThickness="2" />
+                        </Canvas>
+                        <TextBlock Name="NodeBandwidthTrendValueText" Grid.Column="2" Text="—" Margin="8,0,0,0" FontSize="10" Foreground="#A78BFA" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                      </Grid>
+                      <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="88" />
+                          <ColumnDefinition Width="*" />
+                          <ColumnDefinition Width="58" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Hops" FontSize="10" VerticalAlignment="Center" />
+                        <Canvas Name="NodeHopsTrendCanvas" Grid.Column="1" Height="34" Background="#202224" ClipToBounds="True">
+                          <Polyline Name="NodeHopsTrendLine" Stroke="{StaticResource WarningBrush}" StrokeThickness="2" />
+                        </Canvas>
+                        <TextBlock Name="NodeHopsTrendValueText" Grid.Column="2" Text="—" Margin="8,0,0,0" FontSize="10" Foreground="{StaticResource WarningBrush}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                      </Grid>
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="88" />
+                          <ColumnDefinition Width="*" />
+                          <ColumnDefinition Width="58" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Last seen" FontSize="10" VerticalAlignment="Center" />
+                        <Canvas Name="NodeAgeTrendCanvas" Grid.Column="1" Height="34" Background="#202224" ClipToBounds="True">
+                          <Polyline Name="NodeAgeTrendLine" Stroke="#62A8EA" StrokeThickness="2" />
+                        </Canvas>
+                        <TextBlock Name="NodeAgeTrendValueText" Grid.Column="2" Text="—" Margin="8,0,0,0" FontSize="10" Foreground="#62A8EA" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                      </Grid>
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+              </Grid>
+            </GroupBox>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+      <TabItem Header="System">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <Grid Margin="8">
+            <TextBlock Name="SystemDetailsPlaceholder" Margin="10" Text="Connect to OpenMANET to view gateway system details." Opacity="0.65" TextWrapping="Wrap" />
+            <StackPanel Name="SystemDetailsContent" Visibility="Collapsed">
+              <GroupBox Header="System Health" Margin="0,0,0,10">
+                <StackPanel>
+                  <Grid Margin="0,0,0,9">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                      <TextBlock Text="ACTIVE LOCAL NODE FINDINGS" Style="{StaticResource EyebrowTextStyle}" />
+                      <TextBlock Text="Health reported by this OpenMANET node" Margin="0,3,0,0" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
+                    </StackPanel>
+                    <TextBlock Name="HealthSummaryText" Grid.Column="1" Text="Offline" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource DangerBrush}" VerticalAlignment="Top" />
+                  </Grid>
+                  <ItemsControl Name="HealthFindingsItemsControl">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border Padding="8" Margin="0,0,0,5" Background="#171819" CornerRadius="7">
+                          <Grid>
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="10" />
+                              <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Ellipse Width="6" Height="6" VerticalAlignment="Top" Margin="0,4,0,0" Fill="{Binding IndicatorBrush}" />
+                            <TextBlock Grid.Column="1" FontSize="10" TextWrapping="Wrap" Text="{Binding Message}" />
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </GroupBox>
+              <GroupBox Header="Device Identity" Margin="0,0,0,10">
+                <Grid Margin="10">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="92" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+                  <TextBlock Grid.Row="0" Text="Hostname" Opacity="0.65" Margin="0,0,8,6" />
+                  <TextBlock Grid.Row="0" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,6" Text="{Binding HostnameDisplay}" />
+                  <TextBlock Grid.Row="1" Text="Hardware" Opacity="0.65" Margin="0,0,8,6" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" TextWrapping="Wrap" Margin="0,0,0,6" Text="{Binding ModelDisplay}" />
+                  <TextBlock Grid.Row="2" Text="Firmware" Opacity="0.65" Margin="0,0,8,6" />
+                  <TextBlock Grid.Row="2" Grid.Column="1" TextWrapping="Wrap" Margin="0,0,0,6" Text="{Binding FirmwareDisplay}" />
+                  <TextBlock Grid.Row="3" Text="Kernel" Opacity="0.65" Margin="0,0,8,6" />
+                  <TextBlock Grid.Row="3" Grid.Column="1" TextWrapping="Wrap" Margin="0,0,0,6" Text="{Binding KernelDisplay}" />
+                  <TextBlock Grid.Row="4" Text="Architecture" Opacity="0.65" Margin="0,0,8,0" />
+                  <TextBlock Grid.Row="4" Grid.Column="1" TextWrapping="Wrap" Text="{Binding ArchitectureDisplay}" />
+                </Grid>
+              </GroupBox>
+              <GroupBox Header="Platform Resources" Margin="0,0,0,10">
+                <StackPanel Margin="10">
+                  <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="CPU Load" />
+                    <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding CpuLoadDisplay}" />
+                  </Grid>
+                  <ProgressBar Height="7" Minimum="0" Maximum="100" Foreground="#FF00BFFF" Margin="0,0,0,10" Value="{Binding CpuLoadValue, Mode=OneWay}" />
+                  <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Memory" />
+                    <TextBlock Grid.Column="1" FontSize="11" Opacity="0.8" Text="{Binding MemoryDisplay}" />
+                  </Grid>
+                  <ProgressBar Height="7" Minimum="0" Maximum="100" Foreground="#FF3CB371" Margin="0,0,0,10" Value="{Binding MemoryUsagePercent, Mode=OneWay}" />
+                  <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Overlay Storage" />
+                    <TextBlock Grid.Column="1" FontSize="11" Opacity="0.8" Text="{Binding OverlayDisplay}" />
+                  </Grid>
+                  <ProgressBar Height="7" Minimum="0" Maximum="100" Foreground="#FFDAA520" Margin="0,0,0,12" Value="{Binding OverlayUsagePercent, Mode=OneWay}" />
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Margin="0,0,8,10">
+                      <TextBlock Text="Uptime" FontSize="10" Opacity="0.6" />
+                      <TextBlock FontWeight="SemiBold" Text="{Binding UptimeDisplay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,10">
+                      <TextBlock Text="CPU Temperature" FontSize="10" Opacity="0.6" />
+                      <TextBlock FontWeight="SemiBold" Text="{Binding TemperatureDisplay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
+                      <TextBlock Text="Device Time" FontSize="10" Opacity="0.6" />
+                      <TextBlock FontWeight="SemiBold" Text="{Binding DeviceTimeDisplay}" />
+                    </StackPanel>
+                  </Grid>
+                </StackPanel>
+              </GroupBox>
+              <GroupBox Header="Network Interfaces" Margin="0,0,0,10">
+                <ItemsControl Margin="6" ItemsSource="{Binding NetworkEntries}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="7" Padding="9" Margin="0,0,0,6">
+                        <StackPanel>
+                          <Grid>
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="*" />
+                              <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Text="{Binding NameDisplay}" ToolTip="{Binding InterfaceDisplay}" />
+                            <TextBlock Grid.Column="1" FontSize="11" Margin="8,0,0,0" Text="{Binding StateDisplay}">
+                              <FrameworkElement.Style>
+                                <Style TargetType="{x:Type TextBlock}">
+                                  <Setter Property="Foreground" Value="#FFDAA520" />
+                                  <Style.Triggers>
+                                    <DataTrigger Value="Connected" Binding="{Binding StateDisplay}">
+                                      <Setter Property="Foreground" Value="#FF32CD32" />
+                                    </DataTrigger>
+                                    <DataTrigger Value="Not Connected" Binding="{Binding StateDisplay}">
+                                      <Setter Property="Foreground" Value="#FFFF6347" />
+                                    </DataTrigger>
+                                  </Style.Triggers>
+                                </Style>
+                              </FrameworkElement.Style>
+                            </TextBlock>
+                          </Grid>
+                          <TextBlock FontSize="11" Opacity="0.72" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding DetailDisplay}" />
+                          <TextBlock FontSize="10" Opacity="0.6" Margin="0,4,0,0" Text="{Binding TrafficDisplay}" />
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </GroupBox>
+              <TextBlock FontSize="10" Opacity="0.55" HorizontalAlignment="Right" Margin="0,0,2,4" Text="{Binding CollectedAtDisplay, StringFormat=System status refreshed at {0}}" />
+            </StackPanel>
+          </Grid>
+        </ScrollViewer>
+      </TabItem>
+      <TabItem Header="Settings">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="8">
+            <TextBlock Text="Connection" FontSize="18" FontWeight="SemiBold" Margin="2,4,2,4" />
+            <TextBlock Text="Configure the OpenMANET gateway used by this WinTAK client." Style="{StaticResource SecondaryTextStyle}" FontSize="11" TextWrapping="Wrap" Margin="2,0,2,12" />
+            <GroupBox Header="Connection Settings">
+              <Grid Name="ConnectionSettingsPanel">
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Margin="0,0,0,12">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="78" />
+                  </Grid.ColumnDefinitions>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+                  <TextBlock Grid.Row="0" Grid.Column="0" Text="IP Address / Hostname" Style="{StaticResource SecondaryTextStyle}" FontSize="11" Margin="0,0,0,5" />
+                  <TextBlock Grid.Row="0" Grid.Column="2" Text="Port" Style="{StaticResource SecondaryTextStyle}" FontSize="11" Margin="0,0,0,5" />
+                  <TextBox Name="GatewayHostTextBox" Grid.Row="1" Grid.Column="0" Text="10.41.0.1" />
+                  <TextBox Name="GatewayPortTextBox" Grid.Row="1" Grid.Column="2" Text="8081" HorizontalContentAlignment="Center" />
+                </Grid>
+                <TextBlock Grid.Row="1" Text="Username" Style="{StaticResource SecondaryTextStyle}" FontSize="11" Margin="0,0,0,5" />
+                <TextBox Name="UsernameTextBox" Grid.Row="2" Margin="0,0,0,12" />
+                <TextBlock Grid.Row="3" Text="Password" Style="{StaticResource SecondaryTextStyle}" FontSize="11" Margin="0,0,0,5" />
+                <PasswordBox Name="PasswordInput" Grid.Row="4" />
+                <TextBlock Name="TransportModeText" Grid.Row="5" Margin="0,10,0,0" Text="Secure mode: trusted HTTPS frontend with the /auth and /rpc proxies and normal Windows certificate validation." Foreground="{StaticResource SecondaryTextBrush}" FontSize="10" TextWrapping="Wrap" />
+                <CheckBox Name="AllowInsecureHttpCheckBox" Grid.Row="6" Margin="0,12,0,0" Content="I understand the risk — use legacy direct HTTP (port 8087)" Foreground="#FFDAA520" ToolTip="HTTP provides no transport encryption and exposes the username, password, bearer token, and telemetry to interception or modification. Enable only when HTTPS is unavailable and the management path is otherwise protected." />
+              </Grid>
+            </GroupBox>
+            <GroupBox Header="Diagnostics">
+              <StackPanel>
+                <TextBlock Text="The default support snapshot pseudonymizes network identifiers and omits process details. Credentials are never included. Full snapshots contain operationally sensitive network information and should be reviewed before sharing." Foreground="{StaticResource SecondaryTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,10" />
+                <Button Name="ExportDiagnosticsButton" Height="34" Content="Export Redacted Support Snapshot" />
+                <Button Name="ExportFullDiagnosticsButton" Height="34" Margin="0,8,0,0" Content="Export Full Operational Snapshot" />
+              </StackPanel>
+            </GroupBox>
+            <TextBlock Name="GatewayStatusText" Text="Not Connected" Visibility="Collapsed" />
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Button Name="ConnectButton" Grid.Column="0" Height="38" Style="{StaticResource PrimaryButtonStyle}" Content="Connect" />
+              <Button Name="RefreshButton" Grid.Column="2" Height="38" Content="Refresh" IsEnabled="False" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
+  </Grid>
+</UserControl>

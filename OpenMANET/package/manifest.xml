@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<wintakPluginPackage>
+  <metadata>
+    <id>OpenMANET</id>
+    <version>2.0.4.0</version>
+    <sdkVersion>5.7.0.144</sdkVersion>
+    <takVariants>
+    </takVariants>
+    <description>OpenMANET mesh monitoring for WinTAK</description>
+    <dependencies>
+    </dependencies>
+  </metadata>
+</wintakPluginPackage>
