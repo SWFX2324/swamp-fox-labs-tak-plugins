@@ -67,16 +67,22 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 		public string RemoteGatewayMac { get; set; }
 
-		public static NodeStateSnapshot FromNode(OpenMANET_NodeInfo node)
+		public bool RssiPoor { get; set; }
+
+		public static NodeStateSnapshot FromNode(OpenMANET_NodeInfo node, NodeStateSnapshot previous)
 		{
+			int? rssi = node.CurrentRssi ?? node.Rssi;
+			bool wasPoor = previous?.RssiPoor ?? false;
 			return new NodeStateSnapshot
 			{
 				Name = (string.IsNullOrWhiteSpace(node.Name) ? "Unknown node" : node.Name),
 				IsOnline = node.IsOnline,
 				HopsFromSelf = node.HopsFromSelf,
 				RouteInterface = node.RouteInterfaceDisplay,
-				Rssi = (node.CurrentRssi ?? node.Rssi),
-				RemoteGatewayMac = node.RemoteGatewayMac
+				Rssi = rssi,
+				RemoteGatewayMac = node.RemoteGatewayMac,
+				// A missing reading keeps the last state instead of counting as a recovery.
+				RssiPoor = (rssi.HasValue ? IsBelowWithHysteresis(wasPoor, rssi.Value, PoorRssiThresholdDbm, RssiHysteresisDb) : wasPoor)
 			};
 		}
 	}
@@ -91,14 +97,14 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 		public bool HighTemperature { get; set; }
 
-		public static SystemStateSnapshot FromSystem(OpenMANET_SystemInfo system)
+		public static SystemStateSnapshot FromSystem(OpenMANET_SystemInfo system, SystemStateSnapshot previous)
 		{
 			return new SystemStateSnapshot
 			{
-				HighCpu = (system.CpuLoadValue >= 90.0),
-				HighMemory = (system.MemoryUsagePercent >= 90.0),
-				HighStorage = (system.OverlayUsagePercent >= 90.0),
-				HighTemperature = (system.CpuTemperatureCelsius >= 80.0)
+				HighCpu = IsAboveWithHysteresis(previous?.HighCpu ?? false, system.CpuLoadValue, HighResourcePercent, ResourceHysteresisPercent),
+				HighMemory = IsAboveWithHysteresis(previous?.HighMemory ?? false, system.MemoryUsagePercent, HighResourcePercent, ResourceHysteresisPercent),
+				HighStorage = IsAboveWithHysteresis(previous?.HighStorage ?? false, system.OverlayUsagePercent, HighResourcePercent, ResourceHysteresisPercent),
+				HighTemperature = IsAboveWithHysteresis(previous?.HighTemperature ?? false, system.CpuTemperatureCelsius, HighTemperatureCelsius, TemperatureHysteresisCelsius)
 			};
 		}
 	}
@@ -164,6 +170,23 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	private const double CriticalUtilizationPercent = 80.0;
 
 	private const int PoorRssiThresholdDbm = -75;
+
+	// Hysteresis bands: a warning starts at its threshold but only clears once the value is
+	// back past threshold +/- band, so readings hovering near a threshold at the 5-15 s poll
+	// rate don't produce a degraded/recovered event pair every sample.
+	private const double RssiHysteresisDb = 3.0;
+
+	private const double BandwidthHysteresisMbps = 1.0;
+
+	private const double UtilizationHysteresisPercent = 5.0;
+
+	private const double HighResourcePercent = 90.0;
+
+	private const double ResourceHysteresisPercent = 5.0;
+
+	private const double HighTemperatureCelsius = 80.0;
+
+	private const double TemperatureHysteresisCelsius = 5.0;
 
 	private const double BitsPerByte = 8.0;
 
@@ -587,10 +610,10 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			}
 			BandwidthCurrentValueText.Text = FormatThroughput(bandwidthSample.MegabitsPerSecond);
 			_currentBandwidthMbps = bandwidthSample.MegabitsPerSecond;
-			bool flag = bandwidthSample.MegabitsPerSecond < 5.0;
+			bool flag = IsBelowWithHysteresis(_bandwidthIsLow == true, bandwidthSample.MegabitsPerSecond, LowBandwidthThresholdMbps, BandwidthHysteresisMbps);
 			if (_bandwidthIsLow.HasValue && _bandwidthIsLow.Value != flag)
 			{
-				AddMeshEvent(flag ? "WARNING" : "INFO", flag ? ("Mesh bandwidth fell below " + 5.0.ToString("0.0", CultureInfo.InvariantCulture) + " Mbps.") : ("Mesh bandwidth recovered above " + 5.0.ToString("0.0", CultureInfo.InvariantCulture) + " Mbps."));
+				AddMeshEvent(flag ? "WARNING" : "INFO", flag ? ("Mesh bandwidth fell below " + LowBandwidthThresholdMbps.ToString("0.0", CultureInfo.InvariantCulture) + " Mbps.") : ("Mesh bandwidth recovered to " + (LowBandwidthThresholdMbps + BandwidthHysteresisMbps).ToString("0.0", CultureInfo.InvariantCulture) + " Mbps or more."));
 			}
 			_bandwidthIsLow = flag;
 			BandwidthEmptyState.Visibility = Visibility.Collapsed;
@@ -844,24 +867,21 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		UtilizationProgressBar.Value = Math.Min(100.0, num);
 		Brush foreground;
 		string text;
-		string text2;
-		if (num >= 80.0)
+		string text2 = NextUtilizationState(_utilizationState, num);
+		if (text2 == "Critical")
 		{
 			foreground = (FindResource("DangerBrush") as Brush) ?? Brushes.Tomato;
 			text = "High utilization relative to estimated link capacity";
-			text2 = "Critical";
 		}
-		else if (num >= 60.0)
+		else if (text2 == "Warning")
 		{
 			foreground = (FindResource("WarningBrush") as Brush) ?? Brushes.Goldenrod;
 			text = "Elevated utilization relative to estimated link capacity";
-			text2 = "Warning";
 		}
 		else
 		{
 			foreground = (FindResource("MetricBrush") as Brush) ?? Brushes.Teal;
 			text = "Throughput compared with conservative mesh bandwidth";
-			text2 = "Normal";
 		}
 		if (!string.Equals(_utilizationState, text2, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(_utilizationState))
 		{
@@ -875,12 +895,31 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			{
 				severity = ((text2 == "Warning") ? "WARNING" : "INFO");
 			}
-			openMANET.AddMeshEvent(severity, (text2 == "Normal") ? ("Mesh utilization returned below " + 60.0.ToString("0", CultureInfo.InvariantCulture) + "%.") : ("Mesh utilization entered the " + text2.ToLowerInvariant() + " range at " + num.ToString("0.0", CultureInfo.InvariantCulture) + "%."));
+			openMANET.AddMeshEvent(severity, (text2 == "Normal") ? ("Mesh utilization returned below " + (WarningUtilizationPercent - UtilizationHysteresisPercent).ToString("0", CultureInfo.InvariantCulture) + "%.") : ("Mesh utilization entered the " + text2.ToLowerInvariant() + " range at " + num.ToString("0.0", CultureInfo.InvariantCulture) + "%."));
 		}
 		_utilizationState = text2;
 		UtilizationProgressBar.Foreground = foreground;
 		UtilizationCurrentValueText.Foreground = foreground;
 		UtilizationStatusText.Text = text;
+	}
+
+	/// <summary>
+	/// Steps the Normal/Warning/Critical utilization state. Each level is entered at its
+	/// threshold and kept until utilization drops a full hysteresis band below it.
+	/// </summary>
+	private static string NextUtilizationState(string previous, double percent)
+	{
+		bool wasCritical = previous == "Critical";
+		bool wasWarningOrWorse = wasCritical || previous == "Warning";
+		if (IsAboveWithHysteresis(wasCritical, percent, CriticalUtilizationPercent, UtilizationHysteresisPercent))
+		{
+			return "Critical";
+		}
+		if (IsAboveWithHysteresis(wasWarningOrWorse, percent, WarningUtilizationPercent, UtilizationHysteresisPercent))
+		{
+			return "Warning";
+		}
+		return "Normal";
 	}
 
 	private void AddMeshEvent(string severity, string message)
@@ -924,7 +963,8 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			string nodeSelectionKey = GetNodeSelectionKey(node);
 			if (!string.IsNullOrWhiteSpace(nodeSelectionKey))
 			{
-				dictionary[nodeSelectionKey] = NodeStateSnapshot.FromNode(node);
+				_previousNodeStates.TryGetValue(nodeSelectionKey, out NodeStateSnapshot previousState);
+				dictionary[nodeSelectionKey] = NodeStateSnapshot.FromNode(node, previousState);
 			}
 		}
 		if (!_nodeBaselineEstablished)
@@ -962,11 +1002,9 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				{
 					AddMeshEvent("INFO", value2.Name + " remote gateway changed from " + DisplayValue(value.RemoteGatewayMac) + " to " + DisplayValue(value2.RemoteGatewayMac) + ".");
 				}
-				bool num = value.Rssi.HasValue && value.Rssi.Value < -75;
-				bool flag = value2.Rssi.HasValue && value2.Rssi.Value < -75;
-				if (num != flag)
+				if (value.RssiPoor != value2.RssiPoor)
 				{
-					AddMeshEvent(flag ? "WARNING" : "INFO", flag ? (value2.Name + " RSSI degraded below " + (-75).ToString(CultureInfo.InvariantCulture) + " dBm.") : (value2.Name + " RSSI recovered above " + (-75).ToString(CultureInfo.InvariantCulture) + " dBm."));
+					AddMeshEvent(value2.RssiPoor ? "WARNING" : "INFO", value2.RssiPoor ? (value2.Name + " RSSI degraded below " + PoorRssiThresholdDbm.ToString(CultureInfo.InvariantCulture) + " dBm.") : (value2.Name + " RSSI recovered to " + (PoorRssiThresholdDbm + RssiHysteresisDb).ToString("0", CultureInfo.InvariantCulture) + " dBm or better."));
 				}
 			}
 			foreach (KeyValuePair<string, NodeStateSnapshot> previousNodeState in _previousNodeStates)
@@ -1030,23 +1068,39 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			_previousSystemState = null;
 			return;
 		}
-		SystemStateSnapshot systemStateSnapshot = SystemStateSnapshot.FromSystem(system);
+		SystemStateSnapshot systemStateSnapshot = SystemStateSnapshot.FromSystem(system, _previousSystemState);
 		if (_previousSystemState != null)
 		{
-			AddThresholdTransition("Gateway CPU load", _previousSystemState.HighCpu, systemStateSnapshot.HighCpu, "90%");
-			AddThresholdTransition("Gateway memory usage", _previousSystemState.HighMemory, systemStateSnapshot.HighMemory, "90%");
-			AddThresholdTransition("Gateway storage usage", _previousSystemState.HighStorage, systemStateSnapshot.HighStorage, "90%");
-			AddThresholdTransition("Gateway CPU temperature", _previousSystemState.HighTemperature, systemStateSnapshot.HighTemperature, "80 °C");
+			string resourceThreshold = HighResourcePercent.ToString("0", CultureInfo.InvariantCulture) + "%";
+			string resourceClear = (HighResourcePercent - ResourceHysteresisPercent).ToString("0", CultureInfo.InvariantCulture) + "%";
+			string temperatureThreshold = HighTemperatureCelsius.ToString("0", CultureInfo.InvariantCulture) + " °C";
+			string temperatureClear = (HighTemperatureCelsius - TemperatureHysteresisCelsius).ToString("0", CultureInfo.InvariantCulture) + " °C";
+			AddThresholdTransition("Gateway CPU load", _previousSystemState.HighCpu, systemStateSnapshot.HighCpu, resourceThreshold, resourceClear);
+			AddThresholdTransition("Gateway memory usage", _previousSystemState.HighMemory, systemStateSnapshot.HighMemory, resourceThreshold, resourceClear);
+			AddThresholdTransition("Gateway storage usage", _previousSystemState.HighStorage, systemStateSnapshot.HighStorage, resourceThreshold, resourceClear);
+			AddThresholdTransition("Gateway CPU temperature", _previousSystemState.HighTemperature, systemStateSnapshot.HighTemperature, temperatureThreshold, temperatureClear);
 		}
 		_previousSystemState = systemStateSnapshot;
 	}
 
-	private void AddThresholdTransition(string metric, bool previousHigh, bool currentHigh, string threshold)
+	private void AddThresholdTransition(string metric, bool previousHigh, bool currentHigh, string threshold, string clearThreshold)
 	{
 		if (previousHigh != currentHigh)
 		{
-			AddMeshEvent(currentHigh ? "WARNING" : "INFO", currentHigh ? (metric + " crossed the " + threshold + " warning threshold.") : (metric + " recovered below the " + threshold + " warning threshold."));
+			AddMeshEvent(currentHigh ? "WARNING" : "INFO", currentHigh ? (metric + " crossed the " + threshold + " warning threshold.") : (metric + " recovered below " + clearThreshold + "."));
 		}
+	}
+
+	/// <summary>True once value reaches threshold; stays true until it falls below threshold - band.</summary>
+	private static bool IsAboveWithHysteresis(bool wasAbove, double value, double threshold, double band)
+	{
+		return value >= (wasAbove ? threshold - band : threshold);
+	}
+
+	/// <summary>True once value drops below threshold; stays true until it reaches threshold + band.</summary>
+	private static bool IsBelowWithHysteresis(bool wasBelow, double value, double threshold, double band)
+	{
+		return value < (wasBelow ? threshold + band : threshold);
 	}
 
 	private static string DisplayValue(string value)
@@ -1104,9 +1158,9 @@ public partial class OpenMANET : UserControl, IComponentConnector
 					flag2 = true;
 				}
 				int? num = lastNode.CurrentRssi ?? lastNode.Rssi;
-				if (num.HasValue && num.Value < -75)
+				if (num.HasValue && _previousNodeStates.TryGetValue(GetNodeSelectionKey(lastNode), out NodeStateSnapshot nodeState) && nodeState.RssiPoor)
 				{
-					AddHealthFinding(text + " RSSI is " + num.Value.ToString(CultureInfo.InvariantCulture) + " dBm.", Brushes.Goldenrod, critical: false);
+					AddHealthFinding(text + " RSSI is weak at " + num.Value.ToString(CultureInfo.InvariantCulture) + " dBm.", Brushes.Goldenrod, critical: false);
 					flag2 = true;
 				}
 			}
@@ -1115,36 +1169,37 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				AddHealthFinding("The HaLow mesh interface is unavailable.", Brushes.Tomato, critical: true);
 				flag = true;
 			}
-			if (_currentBandwidthMbps.HasValue && _currentBandwidthMbps.Value < 5.0)
+			if (_currentBandwidthMbps.HasValue && _bandwidthIsLow == true)
 			{
-				AddHealthFinding("Mesh bandwidth is " + _currentBandwidthMbps.Value.ToString("0.00", CultureInfo.InvariantCulture) + " Mbps, below the " + 5.0.ToString("0.0", CultureInfo.InvariantCulture) + " Mbps warning threshold.", Brushes.Goldenrod, critical: false);
+				AddHealthFinding("Mesh bandwidth is low at " + _currentBandwidthMbps.Value.ToString("0.00", CultureInfo.InvariantCulture) + " Mbps.", Brushes.Goldenrod, critical: false);
 				flag2 = true;
 			}
-			if (_currentUtilizationPercent.HasValue && _currentUtilizationPercent.Value >= 60.0)
+			if (_currentUtilizationPercent.HasValue && (_utilizationState == "Warning" || _utilizationState == "Critical"))
 			{
-				bool flag3 = _currentUtilizationPercent.Value >= 80.0;
+				bool flag3 = _utilizationState == "Critical";
 				AddHealthFinding("Estimated mesh utilization is " + _currentUtilizationPercent.Value.ToString("0.0", CultureInfo.InvariantCulture) + "%.", flag3 ? Brushes.Tomato : Brushes.Goldenrod, flag3);
 				flag2 = true;
 			}
 			OpenMANET_SystemInfo lastSystemDetails = _client.LastSystemDetails;
-			if (lastSystemDetails != null)
+			SystemStateSnapshot systemState = _previousSystemState;
+			if (lastSystemDetails != null && systemState != null)
 			{
-				if (lastSystemDetails.CpuLoadValue >= 90.0)
+				if (systemState.HighCpu)
 				{
 					AddHealthFinding("Gateway CPU load is " + lastSystemDetails.CpuLoadValue.ToString("0.0", CultureInfo.InvariantCulture) + "%.", Brushes.Goldenrod, critical: false);
 					flag2 = true;
 				}
-				if (lastSystemDetails.MemoryUsagePercent >= 90.0)
+				if (systemState.HighMemory)
 				{
 					AddHealthFinding("Gateway memory usage is " + lastSystemDetails.MemoryUsagePercent.ToString("0.0", CultureInfo.InvariantCulture) + "%.", Brushes.Goldenrod, critical: false);
 					flag2 = true;
 				}
-				if (lastSystemDetails.OverlayUsagePercent >= 90.0)
+				if (systemState.HighStorage)
 				{
 					AddHealthFinding("Gateway storage usage is " + lastSystemDetails.OverlayUsagePercent.ToString("0.0", CultureInfo.InvariantCulture) + "%.", Brushes.Goldenrod, critical: false);
 					flag2 = true;
 				}
-				if (lastSystemDetails.CpuTemperatureCelsius >= 80.0)
+				if (systemState.HighTemperature)
 				{
 					AddHealthFinding("Gateway CPU temperature is " + lastSystemDetails.CpuTemperatureCelsius.ToString("0.0", CultureInfo.InvariantCulture) + " °C.", Brushes.Goldenrod, critical: false);
 					flag2 = true;
