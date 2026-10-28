@@ -673,7 +673,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		{
 			GatewayPortTextBox.Text = "8081";
 		}
-		TransportModeText.Text = (valueOrDefault ? "Legacy mode: direct HTTP API. Credentials and telemetry are not encrypted." : "Secure mode: trusted HTTPS frontend with the /auth and /rpc proxies and normal Windows certificate validation.");
+		TransportModeText.Text = (valueOrDefault ? "Legacy mode: direct HTTP API. Credentials and telemetry are not encrypted." : "Secure mode: HTTPS frontend with the /auth and /rpc proxies. The certificate must be trusted by Windows or WinTAK, and is pinned on first connect.");
 	}
 
 	private async void RefreshButton_Click(object sender, RoutedEventArgs e)

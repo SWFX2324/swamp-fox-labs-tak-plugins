@@ -428,10 +428,10 @@ internal sealed class OpenMANET_Client : IDisposable
 
 	private string _rejectedCertificateThumbprint;
 
-	private bool ValidateServerCertificate(X509Certificate2 certificate, SslPolicyErrors errors, string expectedThumbprint)
+	private bool ValidateServerCertificate(HttpRequestMessage message, X509Certificate2 certificate, X509Chain chain, SslPolicyErrors errors, string expectedThumbprint)
 	{
-		// Pinning adds to Windows validation; it never replaces it.
-		if (errors != SslPolicyErrors.None || certificate == null)
+		// Pinning adds to the normal trust decision; it never replaces it.
+		if (certificate == null || (errors != SslPolicyErrors.None && !IsTrustedByHost(message, certificate, chain, errors)))
 		{
 			return false;
 		}
@@ -443,6 +443,31 @@ internal sealed class OpenMANET_Client : IDisposable
 		}
 		ServerCertificateThumbprint = thumbprint;
 		return true;
+	}
+
+	/// <summary>
+	/// Gives a certificate Windows rejected to WinTAK's global validation callback, the same one
+	/// that applied before this plugin set its own. WinTAK accepts certificates that chain to its
+	/// configured TAK trust store or that were accepted in WinTAK for that host, which is how
+	/// self-signed node certificates are normally trusted.
+	/// </summary>
+	private static bool IsTrustedByHost(HttpRequestMessage message, X509Certificate2 certificate, X509Chain chain, SslPolicyErrors errors)
+	{
+		RemoteCertificateValidationCallback hostCallback = ServicePointManager.ServerCertificateValidationCallback;
+		if (hostCallback == null || message?.RequestUri == null)
+		{
+			return false;
+		}
+		try
+		{
+			// WinTAK's callback reads the target host from an HttpWebRequest sender; creating one
+			// sends nothing.
+			return hostCallback(WebRequest.CreateHttp(message.RequestUri), certificate, chain, errors);
+		}
+		catch
+		{
+			return false;
+		}
 	}
 
 	private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -477,7 +502,7 @@ internal sealed class OpenMANET_Client : IDisposable
 			// Refresh issues four RPCs at once while the 5 s link sampler may also be in flight.
 			MaxConnectionsPerServer = 4,
 			// Runs on every TLS handshake for this session, not just the login.
-			ServerCertificateCustomValidationCallback = (HttpRequestMessage message, X509Certificate2 certificate, X509Chain chain, SslPolicyErrors errors) => ValidateServerCertificate(certificate, errors, expectedThumbprint)
+			ServerCertificateCustomValidationCallback = (HttpRequestMessage message, X509Certificate2 certificate, X509Chain chain, SslPolicyErrors errors) => ValidateServerCertificate(message, certificate, chain, errors, expectedThumbprint)
 		};
 		_sessionCancellation = new CancellationTokenSource();
 		_httpClient = new HttpClient(handler)
