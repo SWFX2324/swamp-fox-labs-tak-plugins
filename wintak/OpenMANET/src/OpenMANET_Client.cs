@@ -403,6 +403,14 @@ internal sealed class OpenMANET_Client : IDisposable
 
 	private GnssPositionResponse _selfPosition;
 
+	private DateTimeOffset? _topologyFetchedUtc;
+
+	private DateTimeOffset? _neighborsFetchedUtc;
+
+	// Three polls. Older cached topology or neighbor data is still shown but no longer keeps
+	// a node Online.
+	private static readonly TimeSpan CachedLivenessLimit = TimeSpan.FromSeconds(45.0);
+
 	private List<MeshNeighborResponse> _lastNeighbors;
 
 	public bool IsConnected { get; private set; }
@@ -559,6 +567,12 @@ internal sealed class OpenMANET_Client : IDisposable
 		Exception topologyFailure = GetEndpointFailure(topologyTask, cancellationToken, token);
 		Exception neighborsFailure = GetEndpointFailure(neighborsTask, cancellationToken, token);
 		Exception dashboardFailure = GetEndpointFailure(dashboardTask, cancellationToken, token);
+		// Nothing answered: the node is unreachable, not partially degraded. Report it as a failed
+		// poll so the pane stops presenting cached data as current.
+		if (nodesFailure != null && topologyFailure != null && neighborsFailure != null && dashboardFailure != null)
+		{
+			ExceptionDispatchInfo.Capture(nodesFailure).Throw();
+		}
 		Dictionary<string, string> failures = new Dictionary<string, string>(StringComparer.Ordinal);
 		if (nodesFailure == null)
 		{
@@ -575,6 +589,7 @@ internal sealed class OpenMANET_Client : IDisposable
 		if (topologyFailure == null)
 		{
 			_lastTopologyResponse = topologyTask.Result?.Topology;
+			_topologyFetchedUtc = DateTimeOffset.UtcNow;
 		}
 		else
 		{
@@ -583,6 +598,7 @@ internal sealed class OpenMANET_Client : IDisposable
 		if (neighborsFailure == null)
 		{
 			_lastNeighbors = neighborsTask.Result?.Neighbors;
+			_neighborsFetchedUtc = DateTimeOffset.UtcNow;
 		}
 		else
 		{
@@ -603,15 +619,19 @@ internal sealed class OpenMANET_Client : IDisposable
 		_selfPosition = (gnssPosition != null && (gnssPosition.FixType == "FIX_TYPE_2D" || gnssPosition.FixType == "FIX_TYPE_3D")) ? gnssPosition : null;
 		ListNodesResponse knownNodes = _lastKnownNodes;
 		MeshTopology topology = _lastTopologyResponse;
-		List<MeshNeighborResponse> list = _lastNeighbors ?? new List<MeshNeighborResponse>();
 		LastTopology = CreateTopologyInfo(topology);
 		DateTimeOffset utcNow = DateTimeOffset.UtcNow;
+		// Cached responses keep the display filled in, but only recent ones count as evidence a
+		// node is alive; otherwise a failing endpoint would keep every node Online indefinitely.
+		bool topologyFresh = _topologyFetchedUtc.HasValue && utcNow - _topologyFetchedUtc.Value <= CachedLivenessLimit;
+		bool neighborsFresh = _neighborsFetchedUtc.HasValue && utcNow - _neighborsFetchedUtc.Value <= CachedLivenessLimit;
+		List<MeshNeighborResponse> list = (neighborsFresh ? _lastNeighbors : null) ?? new List<MeshNeighborResponse>();
 		HashSet<string> hashSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		if (!string.IsNullOrWhiteSpace(topology?.SelfHostname))
+		if (topologyFresh && !string.IsNullOrWhiteSpace(topology?.SelfHostname))
 		{
 			hashSet.Add(topology.SelfHostname.Trim());
 		}
-		if (topology?.Nodes != null)
+		if (topologyFresh && topology?.Nodes != null)
 		{
 			foreach (TopologyNodeResponse node in topology.Nodes)
 			{
@@ -806,6 +826,8 @@ internal sealed class OpenMANET_Client : IDisposable
 		_lastTopologyResponse = null;
 		_lastNeighbors = null;
 		_selfPosition = null;
+		_topologyFetchedUtc = null;
+		_neighborsFetchedUtc = null;
 		ServerCertificateThumbprint = null;
 		_rejectedCertificateThumbprint = null;
 		_lastSeenByNode.Clear();

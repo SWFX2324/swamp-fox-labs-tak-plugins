@@ -58,7 +58,7 @@ Full notes and downloads are on the [Releases](https://github.com/SWFX2324/swamp
 
 | Version | Highlights |
 | --- | --- |
-| **2.1.0.1** | Mesh nodes and quality-colored links on the WinTAK map from each node's GPS; HTTPS certificate pinning with change detection; GPS position in node details. |
+| **2.1.0.2** | Mesh nodes and quality-colored links on the WinTAK map from each node's GPS; HTTPS certificate pinning with change detection; GPS position in node details; nodes no longer stay Online on old data after the mesh goes quiet. |
 | 2.0.8.0 | WinTAK notifications for node, link, gateway and connection events; a health dot on the toolbar icon; automatic reconnect after node reboots; callsign export/import. |
 | 2.0.7.2 | New UI; Online as soon as a direct RF link is live; Discovering state; powered-off nodes go Stale in about 30 s; vanity callsigns; the connected node is listed. |
 | 2.0.5.0 | Monitoring continues with the pane closed; 15-second polling, where one failed request no longer blanks the rest; steadier threshold warnings. |

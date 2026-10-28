@@ -231,6 +231,13 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 	private bool _reconnecting;
 
+	private DateTimeOffset _lastSuccessfulRefreshUtc;
+
+	// Set once polling has failed for UnreachableAfter, so stale data is not shown as current.
+	private bool _nodesMarkedUnreachable;
+
+	private static readonly TimeSpan UnreachableAfter = TimeSpan.FromSeconds(45.0);
+
 	private readonly DispatcherTimer _autoRefreshTimer;
 
 	private readonly DispatcherTimer _throughputTimer;
@@ -440,6 +447,8 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			AddMeshEvent("INFO", "Pinned the HTTPS certificate for " + host + ":" + port.ToString(CultureInfo.InvariantCulture) + " (SHA-256 " + OpenMANET_CertificatePinStore.Format(_client.ServerCertificateThumbprint) + ").");
 		}
 		UpdateCertificatePinText();
+		// Start the unreachable clock at login, so a session that never completes a poll still ages out.
+		_lastSuccessfulRefreshUtc = DateTimeOffset.UtcNow;
 		SaveConnectionSettings();
 		GatewayStatusText.Text = $"{GatewayHostTextBox.Text.Trim()}:{port}";
 		UpdateConnectionState(connected: true);
@@ -717,6 +726,12 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			UpdateOperationalEvents(_client.LastTopology, _client.LastSystemDetails);
 			CaptureNodeTrendSamples(list);
 			_lastNodes = list;
+			_lastSuccessfulRefreshUtc = DateTimeOffset.UtcNow;
+			if (_nodesMarkedUnreachable)
+			{
+				_nodesMarkedUnreachable = false;
+				AddMeshEvent("INFO", "Contact with the OpenMANET gateway restored.", OpenMANET_EventCategory.Connection);
+			}
 			UpdateMapLayer();
 			if (_refreshFailureActive)
 			{
@@ -777,6 +792,10 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			{
 				AddMeshEvent("WARNING", "OpenMANET polling failed: " + text, OpenMANET_EventCategory.Connection);
 				_refreshFailureActive = true;
+			}
+			if (!_nodesMarkedUnreachable && _lastNodes.Count > 0 && DateTimeOffset.UtcNow - _lastSuccessfulRefreshUtc >= UnreachableAfter)
+			{
+				MarkNodesUnreachable();
 			}
 			UpdateHealthFindings();
 			UpdateConnectionStatusIndicator();
@@ -1458,7 +1477,12 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				AddHealthFinding("No other mesh nodes are reporting.", DangerIndicatorBrush, critical: true);
 				flag = true;
 			}
-			if (_refreshFailureActive)
+			if (_nodesMarkedUnreachable)
+			{
+				AddHealthFinding("Lost contact with the OpenMANET gateway; node status is unknown.", DangerIndicatorBrush, critical: true);
+				flag = true;
+			}
+			else if (_refreshFailureActive)
 			{
 				AddHealthFinding("The latest OpenMANET poll failed; displayed data may be stale.", WarningIndicatorBrush, critical: false);
 				flag2 = true;
@@ -1755,6 +1779,35 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				edge.ToName = to.NameDisplay;
 			}
 		}
+	}
+
+	/// <summary>
+	/// After polling has failed long enough, stops presenting the last poll as current: every
+	/// node becomes Stale until a poll succeeds again, including on the map.
+	/// </summary>
+	private void MarkNodesUnreachable()
+	{
+		_nodesMarkedUnreachable = true;
+		foreach (OpenMANET_NodeInfo node in _lastNodes)
+		{
+			node.IsOnline = false;
+			node.IsRouted = false;
+			node.HasLiveLink = false;
+			node.IsDiscovering = false;
+		}
+		NodeCountText.Text = "0";
+		AddMeshEvent("CRITICAL", "Lost contact with the OpenMANET gateway; all nodes are shown as stale until polling recovers.", OpenMANET_EventCategory.Connection);
+		if (NodeDetailsPanel.DataContext is OpenMANET_NodeInfo selected)
+		{
+			RefreshNodeNameViews(selected);
+		}
+		else
+		{
+			NodesListBox.Items.Refresh();
+			LinkQualityNodeComboBox.Items.Refresh();
+			UpdateMapLayer();
+		}
+		UpdateHealthFindings();
 	}
 
 	private void UpdateMapLayer()
@@ -2612,6 +2665,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		_nodeTrendHistory.Clear();
 		_nodeBaselineEstablished = false;
 		_refreshFailureActive = false;
+		_nodesMarkedUnreachable = false;
 		_previousTopologyHealth = null;
 		_previousSystemState = null;
 		_meshInterfaceAvailable = null;
