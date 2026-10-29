@@ -1,10 +1,27 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
 
 namespace WinTAK_OpenMANET_Plugin;
+
+/// <summary>One node's callsign, as saved locally or as shared by another operator.</summary>
+internal sealed class OpenMANET_CallsignEntry
+{
+	public string Mac { get; set; }
+
+	public string Hostname { get; set; }
+
+	public string Callsign { get; set; }
+
+	// When the callsign was last set; decides between operators who named the same node.
+	public DateTimeOffset UpdatedUtc { get; set; }
+
+	// Shared by the operator connected to this node, whose name for it outranks other operators'.
+	public bool FromNodeOperator { get; set; }
+}
 
 /// <summary>
 /// User-assigned display callsigns for mesh nodes, kept on this machine only. Entries are keyed
@@ -14,22 +31,13 @@ internal sealed class OpenMANET_CallsignStore
 {
 	public const int MaximumLength = 24;
 
-	private const int MaximumEntries = 256;
+	public const int MaximumEntries = 256;
 
 	private const long MaximumFileBytes = 64 * 1024;
 
 	private readonly string _filePath;
 
-	private readonly List<Entry> _entries = new List<Entry>();
-
-	private sealed class Entry
-	{
-		public string Mac { get; set; }
-
-		public string Hostname { get; set; }
-
-		public string Callsign { get; set; }
-	}
+	private readonly List<OpenMANET_CallsignEntry> _entries = new List<OpenMANET_CallsignEntry>();
 
 	public OpenMANET_CallsignStore(string filePath)
 	{
@@ -45,10 +53,12 @@ internal sealed class OpenMANET_CallsignStore
 			{
 				return;
 			}
+			// Files from before 2.1.1 have no timestamp column; date those entries by the file.
+			DateTimeOffset fileTime = new DateTimeOffset(File.GetLastWriteTimeUtc(_filePath), TimeSpan.Zero);
 			foreach (string line in File.ReadAllLines(_filePath, Encoding.UTF8))
 			{
 				string[] parts = line.Split('\t');
-				if (parts.Length != 3 || _entries.Count >= MaximumEntries)
+				if ((parts.Length != 3 && parts.Length != 4) || _entries.Count >= MaximumEntries)
 				{
 					continue;
 				}
@@ -57,7 +67,7 @@ internal sealed class OpenMANET_CallsignStore
 				string hostname = NormalizeHostname(parts[1]);
 				if (callsign != null && (mac != null || hostname != null))
 				{
-					_entries.Add(new Entry { Mac = mac, Hostname = hostname, Callsign = callsign });
+					_entries.Add(new OpenMANET_CallsignEntry { Mac = mac, Hostname = hostname, Callsign = callsign, UpdatedUtc = (parts.Length == 4) ? ParseTime(parts[3], fileTime) : fileTime });
 				}
 			}
 		}
@@ -71,18 +81,24 @@ internal sealed class OpenMANET_CallsignStore
 	/// <summary>Returns the callsign for a node, matching any of its MACs first, then its hostname.</summary>
 	public string Find(IEnumerable<string> macs, string hostname)
 	{
+		return FindEntry(_entries, macs, hostname)?.Callsign;
+	}
+
+	/// <summary>Finds a node's entry in <paramref name="entries"/>: any of its MACs first, then its hostname.</summary>
+	public static OpenMANET_CallsignEntry FindEntry(IReadOnlyList<OpenMANET_CallsignEntry> entries, IEnumerable<string> macs, string hostname)
+	{
 		foreach (string mac in macs ?? Enumerable.Empty<string>())
 		{
 			string normalized = NormalizeMac(mac);
-			Entry entry = (normalized == null) ? null : _entries.Find((Entry e) => e.Mac == normalized);
+			OpenMANET_CallsignEntry entry = (normalized == null) ? null : entries.FirstOrDefault((OpenMANET_CallsignEntry e) => e.Mac == normalized);
 			if (entry != null)
 			{
-				return entry.Callsign;
+				return entry;
 			}
 		}
 		string host = NormalizeHostname(hostname);
-		return (host == null) ? null : _entries.Find((Entry e) => e.Mac == null && e.Hostname == host)?.Callsign
-			?? _entries.Find((Entry e) => e.Hostname == host)?.Callsign;
+		return (host == null) ? null : entries.FirstOrDefault((OpenMANET_CallsignEntry e) => e.Mac == null && e.Hostname == host)
+			?? entries.FirstOrDefault((OpenMANET_CallsignEntry e) => e.Hostname == host);
 	}
 
 	/// <summary>Sets or, when <paramref name="callsign"/> is blank, clears a node's callsign and saves.</summary>
@@ -99,25 +115,28 @@ internal sealed class OpenMANET_CallsignStore
 		{
 			throw new ArgumentException($"Callsigns can be up to {MaximumLength} characters of letters, numbers, spaces and - _ . / #.");
 		}
-		_entries.RemoveAll((Entry e) => (normalizedMac != null) ? (e.Mac == normalizedMac || (e.Mac == null && e.Hostname == normalizedHost)) : (e.Mac == null && e.Hostname == normalizedHost));
+		_entries.RemoveAll((OpenMANET_CallsignEntry e) => (normalizedMac != null) ? (e.Mac == normalizedMac || (e.Mac == null && e.Hostname == normalizedHost)) : (e.Mac == null && e.Hostname == normalizedHost));
 		if (value != null)
 		{
 			if (_entries.Count >= MaximumEntries)
 			{
 				throw new InvalidOperationException("Too many saved callsigns.");
 			}
-			_entries.Add(new Entry { Mac = normalizedMac, Hostname = normalizedHost, Callsign = value });
+			_entries.Add(new OpenMANET_CallsignEntry { Mac = normalizedMac, Hostname = normalizedHost, Callsign = value, UpdatedUtc = DateTimeOffset.UtcNow });
 		}
 		Save();
 	}
 
 	public int Count => _entries.Count;
 
+	/// <summary>A copy of every saved callsign, for sharing over TAK.</summary>
+	public List<OpenMANET_CallsignEntry> Entries => _entries.Select((OpenMANET_CallsignEntry e) => new OpenMANET_CallsignEntry { Mac = e.Mac, Hostname = e.Hostname, Callsign = e.Callsign, UpdatedUtc = e.UpdatedUtc }).ToList();
+
 	/// <summary>Writes every callsign to a CSV file (mac,hostname,callsign) for sharing.</summary>
 	public void ExportTo(string path)
 	{
 		List<string> lines = new List<string> { "mac,hostname,callsign" };
-		lines.AddRange(_entries.Select((Entry e) => (e.Mac ?? string.Empty) + "," + (e.Hostname ?? string.Empty) + "," + e.Callsign));
+		lines.AddRange(_entries.Select((OpenMANET_CallsignEntry e) => (e.Mac ?? string.Empty) + "," + (e.Hostname ?? string.Empty) + "," + e.Callsign));
 		File.WriteAllLines(path, lines, new UTF8Encoding(false));
 	}
 
@@ -133,6 +152,7 @@ internal sealed class OpenMANET_CallsignStore
 			throw new InvalidOperationException("The callsign file is too large.");
 		}
 		int imported = 0;
+		DateTimeOffset now = DateTimeOffset.UtcNow;
 		foreach (string raw in File.ReadAllLines(path, Encoding.UTF8))
 		{
 			string line = raw.Trim();
@@ -150,13 +170,13 @@ internal sealed class OpenMANET_CallsignStore
 				skipped++;
 				continue;
 			}
-			_entries.RemoveAll((Entry e) => (mac != null) ? (e.Mac == mac || (e.Mac == null && e.Hostname == hostname)) : (e.Mac == null && e.Hostname == hostname));
+			_entries.RemoveAll((OpenMANET_CallsignEntry e) => (mac != null) ? (e.Mac == mac || (e.Mac == null && e.Hostname == hostname)) : (e.Mac == null && e.Hostname == hostname));
 			if (_entries.Count >= MaximumEntries)
 			{
 				skipped++;
 				continue;
 			}
-			_entries.Add(new Entry { Mac = mac, Hostname = hostname, Callsign = callsign });
+			_entries.Add(new OpenMANET_CallsignEntry { Mac = mac, Hostname = hostname, Callsign = callsign, UpdatedUtc = now });
 			imported++;
 		}
 		Save();
@@ -170,7 +190,7 @@ internal sealed class OpenMANET_CallsignStore
 		{
 			Directory.CreateDirectory(directory);
 		}
-		File.WriteAllLines(_filePath, _entries.Select((Entry e) => (e.Mac ?? string.Empty) + "\t" + (e.Hostname ?? string.Empty) + "\t" + e.Callsign), new UTF8Encoding(false));
+		File.WriteAllLines(_filePath, _entries.Select((OpenMANET_CallsignEntry e) => (e.Mac ?? string.Empty) + "\t" + (e.Hostname ?? string.Empty) + "\t" + e.Callsign + "\t" + FormatTime(e.UpdatedUtc)), new UTF8Encoding(false));
 	}
 
 	/// <summary>Trims a proposed callsign and returns null when it is empty or has disallowed characters.</summary>
@@ -195,21 +215,36 @@ internal sealed class OpenMANET_CallsignStore
 		return trimmed;
 	}
 
-	private static string NormalizeMac(string mac)
+	public static string NormalizeMac(string mac)
 	{
 		if (string.IsNullOrWhiteSpace(mac) || mac.Trim() == "--")
 		{
 			return null;
 		}
-		return mac.Trim().Replace('-', ':').ToLowerInvariant();
+		string normalized = mac.Trim().Replace('-', ':').ToLowerInvariant();
+		// Nothing longer than an EUI-64 is a MAC; this also bounds what other operators can send.
+		return (normalized.Length > 23) ? null : normalized;
 	}
 
-	private static string NormalizeHostname(string hostname)
+	public static string NormalizeHostname(string hostname)
 	{
-		if (string.IsNullOrWhiteSpace(hostname) || hostname.Trim() == "Unknown node")
+		// The plugin's placeholders for nodes without a hostname aren't names; matching on them
+		// would give every unnamed node the same callsign.
+		if (string.IsNullOrWhiteSpace(hostname) || string.Equals(hostname.Trim(), "Unknown node", StringComparison.OrdinalIgnoreCase) || string.Equals(hostname.Trim(), "Local node", StringComparison.OrdinalIgnoreCase))
 		{
 			return null;
 		}
-		return hostname.Trim().ToLowerInvariant();
+		string normalized = hostname.Trim().ToLowerInvariant();
+		return (normalized.Length > 63) ? null : normalized;
+	}
+
+	public static string FormatTime(DateTimeOffset value)
+	{
+		return value.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
+	}
+
+	public static DateTimeOffset ParseTime(string value, DateTimeOffset fallback)
+	{
+		return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTimeOffset parsed) ? parsed : fallback;
 	}
 }

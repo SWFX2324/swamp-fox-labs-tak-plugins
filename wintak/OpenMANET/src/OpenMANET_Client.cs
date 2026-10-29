@@ -960,6 +960,12 @@ internal sealed class OpenMANET_Client : IDisposable
 		{
 			hostname = topology?.SelfHostname?.Trim();
 		}
+		if (string.IsNullOrWhiteSpace(hostname))
+		{
+			// Some firmware leaves the topology's own hostname blank; the system status still has it,
+			// and callsigns need it to match the node as other operators see it.
+			hostname = LastSystemDetails?.Hostname?.Trim();
+		}
 		string mac = (self?.MacAddress ?? topology?.SelfMac)?.Trim();
 		if (string.IsNullOrWhiteSpace(hostname) && string.IsNullOrWhiteSpace(mac))
 		{

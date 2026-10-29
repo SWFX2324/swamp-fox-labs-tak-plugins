@@ -6,13 +6,16 @@ A WinTAK plugin for monitoring an OpenMANET HaLow mesh from a WinTAK client. It 
 
 - **Dashboard:** nodes online, mesh bandwidth, throughput and utilization, plus the node list and a mesh event log.
 - **Topology:** a live map of nodes and links from the connected node, including BLOS links.
-- **Nodes:** per-node link quality, RSSI, routing details, 60-minute trends, and optional vanity callsigns. Callsigns are saved locally and shown in place of hostnames; export and import them as CSV to share with your team.
+- **Nodes:** per-node link quality, RSSI, routing details, 60-minute trends, and optional vanity callsigns shown in place of hostnames.
+- **Shared callsigns:** opt in under Settings → Callsigns to share your callsigns with other operators running the plugin over your TAK network, and to use theirs. Changes go out right away and are repeated every minute; turning on shared callsigns asks other operators for theirs, so names appear within seconds. Your own callsigns always take precedence. Between other operators, the one connected to a node has the final say on its name, so nobody can rename your node for everyone else; anyone can still name nodes nobody is connected to, such as relays. Turning sharing off withdraws what you shared. CSV export and import still work for teams that prefer files.
 - **System:** health findings, CPU, memory, storage and temperature, and network interfaces on the connected node.
 - **Alerts:** WinTAK notifications when nodes go stale or come back, links weaken, gateway health changes, or the connection drops. Pick which in Settings. The OpenMANET toolbar icon shows a green, amber or red health dot, so you can see the mesh state with the pane closed.
-- **Map:** nodes with a GPS fix appear on the WinTAK map as radio markers labeled with their callsigns, joined by link lines colored by quality (green, amber, red; BLOS dashed orange). The map items are drawn locally only and never sent to your TAK server. Turn them off under Settings → Map.
+- **Map:** each node is shown as the TAK user at it (within 25 m of the node's GPS by default), using that user's own WinTAK marker, and the plugin draws link lines between them colored by quality (green, amber, red; BLOS dashed orange). The plugin adds no icons of its own. Click a user's marker and choose the OpenMANET item in WinTAK's radial menu to open their node's details. Nodes with nobody at them aren't drawn unless you turn on **Draw radio icons for nodes nobody is at**. Nodes with COT OUT turned on also broadcast their own radio marker; the plugin hides it, so nodes don't add icons. Lines are drawn locally only and never sent to your TAK server. All of this is under Settings → Map.
+- **Set a WinTAK callsign on every computer.** A computer without one appears to others as its Windows ID (S-1-5-21-…), and nodes aren't drawn as it.
+- **Node GPS as your position (no plugin needed):** a laptop without its own GPS can use the connected node's fix through WinTAK's built-in support. On the node's GPS / GNSS page, turn on **NMEA OUT**. In WinTAK, open Settings → GPS Preferences and set GPS Type to **Network Provided GPS**. The node sends its fix to every device in its DHCP lease list, so your self marker follows the node that gave your computer its IP address. If one node hands out addresses for the whole mesh, every laptop gets that node's position, even while plugged into another node.
 - **Certificate pinning:** the node's HTTPS certificate is remembered on first connect. If it ever changes, the plugin blocks the connection and shows both fingerprints before trusting the new one.
 - **Auto-reconnect:** after a node reboot or an expired session, the plugin signs back in on its own, waiting a little longer between each attempt. It stops if the password is rejected.
-- **Diagnostics:** redacted or full snapshots for troubleshooting. Credentials are never included.
+- **Diagnostics:** redacted or full snapshots for troubleshooting, including a per-node status timeline (when each node was first seen, heard over RF, routed and online). Credentials are never included.
 
 ## Screenshots
 
@@ -58,7 +61,9 @@ Full notes and downloads are on the [Releases](https://github.com/SWFX2324/swamp
 
 | Version | Highlights |
 | --- | --- |
-| **2.1.0.2** | Mesh nodes and quality-colored links on the WinTAK map from each node's GPS; HTTPS certificate pinning with change detection; GPS position in node details; nodes no longer stay Online on old data after the mesh goes quiet. |
+| **2.1.4.2** | The map uses only WinTAK's own markers: each node is shown as the TAK user at it, with quality-colored link lines between users; radio icons for unattended nodes are optional. Nodes' own COT OUT markers are hidden. Shared callsigns arrive within seconds and are repeated every minute; the operator connected to a node has the final say on its shared name. Link lines WinTAK restored from an earlier session are removed. README covers using the node's GPS as your WinTAK position. |
+| 2.1.1.1 | Opt-in callsign sharing between operators over TAK, matched by hostname and every known MAC; click a node's map marker to open its details; a per-node status timeline in diagnostic snapshots. |
+| 2.1.0.2 | Mesh nodes and quality-colored links on the WinTAK map from each node's GPS; HTTPS certificate pinning with change detection; GPS position in node details; nodes no longer stay Online on old data after the mesh goes quiet. |
 | 2.0.8.0 | WinTAK notifications for node, link, gateway and connection events; a health dot on the toolbar icon; automatic reconnect after node reboots; callsign export/import. |
 | 2.0.7.2 | New UI; Online as soon as a direct RF link is live; Discovering state; powered-off nodes go Stale in about 30 s; vanity callsigns; the connected node is listed. |
 | 2.0.5.0 | Monitoring continues with the pane closed; 15-second polling, where one failed request no longer blanks the rest; steadier threshold warnings. |
@@ -75,3 +80,23 @@ You need the .NET SDK and WinTAK 5.7.0.144 installed (the build references its S
 The package is written to `dist\OpenMANET-<version>-<sdk>.wpk`. Versions come from `src/Properties/AssemblyInfo.cs`.
 
 After UI changes, regenerate the README screenshots with `.\docs\render-screenshots.ps1`. It renders the built plugin with sample data, so no real network details end up in the images.
+
+## Tests
+
+Offline tests load the built plugin and WinTAK's SDK assemblies into PowerShell; a small fake OpenMANET server stands in for a node. They don't need WinTAK running or a mesh attached, and they never touch your saved settings. Build first, then:
+
+```powershell
+.\tests\Run-Tests.ps1
+```
+
+It prints each check and exits with code 1 if any fail.
+
+## Roadmap
+
+Planned for 2.2.2:
+
+- **Fallback node:** a list of node addresses, so the plugin moves to another reachable node when the connected one goes down.
+- **Session recording:** export the event log, per-node RSSI and link quality, and GPS tracks (CSV or GPX) for after-action review and range testing.
+- **Map extras:** distance labels on link lines and short track trails per node.
+
+Cold boot: the 2.1.1 status timeline shows a node turns Online in the same poll the connected node first hears it on the radio, so the remaining delay (several minutes) is the node booting and joining the HaLow mesh, not the plugin.

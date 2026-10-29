@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -114,6 +115,23 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				HighStorage = IsAboveWithHysteresis(previous?.HighStorage ?? false, system.OverlayUsagePercent, HighResourcePercent, ResourceHysteresisPercent),
 				HighTemperature = IsAboveWithHysteresis(previous?.HighTemperature ?? false, system.CpuTemperatureCelsius, HighTemperatureCelsius, TemperatureHysteresisCelsius)
 			};
+		}
+	}
+
+	private sealed class NodeTimelineEntry
+	{
+		public DateTimeOffset CapturedAt { get; set; }
+
+		// What changed is compared on this; the detail adds readings that move every poll.
+		public string State { get; set; }
+
+		public string Detail { get; set; }
+
+		public static NodeTimelineEntry FromNode(OpenMANET_NodeInfo node, DateTimeOffset now)
+		{
+			string state = node.StatusDisplay + " | routed " + (node.IsRouted ? "yes" : "no") + " | RF link " + (node.HasLiveLink ? "yes" : "no") + " | neighbor table " + (node.HasDirectLinkMetrics ? "yes" : "no") + " | hops " + node.HopsDisplay;
+			string detail = "last heard " + node.LinkAgeDisplay + " | RSSI " + node.RssiDisplay + " | gossip age " + (node.GossipAgeSeconds.HasValue ? (node.GossipAgeSeconds.Value.ToString(CultureInfo.InvariantCulture) + " s") : "--");
+			return new NodeTimelineEntry { CapturedAt = now, State = state, Detail = detail };
 		}
 	}
 
@@ -298,6 +316,13 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 	private SystemStateSnapshot _previousSystemState;
 
+	private DateTimeOffset _lastCallsignShareUtc;
+
+	// Per node, each change in how it is seen, for diagnosing slow cold boots.
+	private readonly Dictionary<string, List<NodeTimelineEntry>> _nodeTimelines = new Dictionary<string, List<NodeTimelineEntry>>(StringComparer.OrdinalIgnoreCase);
+
+	private const int MaximumTimelineEntries = 40;
+
 	public OpenMANET()
 	{
 		InitializeComponent();
@@ -317,12 +342,11 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			// Closing the dock pane only hides its tool window and the same control comes back
 			// on reopen, so monitoring keeps running until WinTAK itself shuts down.
 			Dispatcher.ShutdownStarted += Dispatcher_ShutdownStarted;
-			string path = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinTAK", "Plugins", "WinTAK_OpenMANET_Plugin");
+			string path = OpenMANET_PluginHost.SettingsDirectory;
 			_settingsFilePath = System.IO.Path.Combine(path, "connection.settings");
 			_callsigns = new OpenMANET_CallsignStore(System.IO.Path.Combine(path, "callsigns.settings"));
 			_callsigns.Load();
-			_preferences = new OpenMANET_Preferences(System.IO.Path.Combine(path, "preferences.settings"));
-			_preferences.Load();
+			_preferences = OpenMANET_PluginHost.Preferences;
 			_certificatePins = new OpenMANET_CertificatePinStore(System.IO.Path.Combine(path, "trusted-certificates.settings"));
 			_certificatePins.Load();
 			LoadConnectionSettings();
@@ -343,16 +367,28 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			CallsignTextBox.KeyDown += CallsignTextBox_KeyDown;
 			ExportCallsignsButton.Click += ExportCallsignsButton_Click;
 			ImportCallsignsButton.Click += ImportCallsignsButton_Click;
+			MergeDistanceComboBox.ItemsSource = OpenMANET_Preferences.MergeDistanceChoices;
 			LoadPreferenceControls();
 			ForgetCertificateButton.Click += ForgetCertificateButton_Click;
 			GatewayHostTextBox.TextChanged += (sender, e) => UpdateCertificatePinText();
 			GatewayPortTextBox.TextChanged += (sender, e) => UpdateCertificatePinText();
 			UpdateCertificatePinText();
-			foreach (CheckBox preferenceCheckBox in new[] { NotifyNodesCheckBox, NotifyLinksCheckBox, NotifyGatewayCheckBox, NotifyConnectionCheckBox, AutoReconnectCheckBox, ShowOnMapCheckBox })
+			foreach (CheckBox preferenceCheckBox in new[] { NotifyNodesCheckBox, NotifyLinksCheckBox, NotifyGatewayCheckBox, NotifyConnectionCheckBox, AutoReconnectCheckBox, ShowOnMapCheckBox, HideNodeOwnMarkersCheckBox, ShowUnattendedNodesCheckBox, ShareCallsignsCheckBox, UseSharedCallsignsCheckBox })
 			{
 				preferenceCheckBox.Checked += PreferenceCheckBox_Changed;
 				preferenceCheckBox.Unchecked += PreferenceCheckBox_Changed;
 			}
+			MergeDistanceComboBox.SelectionChanged += MergeDistanceComboBox_SelectionChanged;
+			ForgetSharedCallsignsButton.Click += ForgetSharedCallsignsButton_Click;
+			OpenMANET_PluginHost.CallsignSharing.Received += CallsignSharing_Received;
+			OpenMANET_PluginHost.CallsignsRequested += PluginHost_CallsignsRequested;
+			if (_preferences.UseSharedCallsigns)
+			{
+				// Names from operators already sharing arrive in seconds instead of at their next rebroadcast.
+				OpenMANET_PluginHost.RequestSharedCallsigns();
+			}
+			OpenMANET_PluginHost.NodeFocusRequested += PluginHost_NodeFocusRequested;
+			UpdateCallsignSharingText();
 			ExportDiagnosticsButton.Click += ExportDiagnosticsButton_Click;
 			ExportFullDiagnosticsButton.Click += ExportFullDiagnosticsButton_Click;
 			AllowInsecureHttpCheckBox.Checked += AllowInsecureHttpCheckBox_Changed;
@@ -692,6 +728,11 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 	private async void AutoRefreshTimer_Tick(object sender, EventArgs e)
 	{
+		// Rebroadcast now and then so operators who join later get the names too.
+		if (_preferences.ShareCallsigns && DateTimeOffset.UtcNow - _lastCallsignShareUtc >= OpenMANET_CallsignSharing.RebroadcastInterval)
+		{
+			ShareCallsigns(announce: false);
+		}
 		await RefreshAsync();
 	}
 
@@ -723,6 +764,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			UpdateTopology(_client.LastTopology);
 			UpdateSystemDetails(_client.LastSystemDetails);
 			UpdateNodeEvents(list);
+			RecordNodeTimelines(list);
 			UpdateOperationalEvents(_client.LastTopology, _client.LastSystemDetails);
 			CaptureNodeTrendSamples(list);
 			_lastNodes = list;
@@ -830,10 +872,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		}
 		NodeDetailsPanel.DataContext = openMANET_NodeInfo;
 		// Polls reselect the node every 15 s; don't overwrite a callsign being typed.
-		if (!CallsignTextBox.IsKeyboardFocusWithin)
-		{
-			CallsignTextBox.Text = openMANET_NodeInfo.Callsign ?? string.Empty;
-		}
+		UpdateCallsignEditor(openMANET_NodeInfo, keepTyping: true);
 		NodeDetailsPlaceholder.Visibility = Visibility.Collapsed;
 		NodeDetailsContent.Visibility = Visibility.Visible;
 		SelectTopologyNode(openMANET_NodeInfo);
@@ -1749,7 +1788,16 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	{
 		foreach (OpenMANET_NodeInfo node in nodes)
 		{
-			node.Callsign = _callsigns.Find(new[] { node.MacAddress, node.LinkHardwareAddress }, node.Name);
+			string[] macs = { node.MacAddress, node.LinkHardwareAddress };
+			node.Callsign = _callsigns.Find(macs, node.Name);
+			node.CallsignSharedBy = null;
+			// Names set on this computer always win; shared ones only fill the gaps.
+			OpenMANET_SharedCallsign shared = (node.HasCallsign || !_preferences.UseSharedCallsigns) ? null : OpenMANET_PluginHost.CallsignSharing.Find(macs, node.Name);
+			if (shared != null)
+			{
+				node.Callsign = shared.Callsign;
+				node.CallsignSharedBy = shared.SharedBy;
+			}
 		}
 		if (topology == null)
 		{
@@ -1759,7 +1807,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		foreach (OpenMANET_TopologyNodeInfo topologyNode in topology.Nodes)
 		{
 			List<string> macs = new List<string>(topologyNode.SecondaryMacs) { topologyNode.MacAddress };
-			topologyNode.Callsign = _callsigns.Find(macs, topologyNode.Hostname);
+			topologyNode.Callsign = _callsigns.Find(macs, topologyNode.Hostname) ?? (_preferences.UseSharedCallsigns ? OpenMANET_PluginHost.CallsignSharing.Find(macs, topologyNode.Hostname)?.Callsign : null);
 			foreach (string mac in macs)
 			{
 				if (!string.IsNullOrWhiteSpace(mac))
@@ -1814,7 +1862,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	{
 		if (_isConnected && _preferences.ShowOnMap)
 		{
-			_mapLayer.Update(_lastNodes, _lastTopology);
+			_mapLayer.Update(_lastNodes, _lastTopology, OpenMANET_Operators.Current(DateTime.UtcNow), _preferences.MergeDistanceMeters, _preferences.ShowUnattendedNodes);
 		}
 		else
 		{
@@ -1830,6 +1878,29 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		NotifyConnectionCheckBox.IsChecked = _preferences.NotifyConnection;
 		AutoReconnectCheckBox.IsChecked = _preferences.AutoReconnect;
 		ShowOnMapCheckBox.IsChecked = _preferences.ShowOnMap;
+		HideNodeOwnMarkersCheckBox.IsChecked = _preferences.HideNodeOwnMarkers;
+		ShowUnattendedNodesCheckBox.IsChecked = _preferences.ShowUnattendedNodes;
+		MergeDistanceComboBox.SelectedItem = _preferences.MergeDistanceMeters;
+		ShareCallsignsCheckBox.IsChecked = _preferences.ShareCallsigns;
+		UseSharedCallsignsCheckBox.IsChecked = _preferences.UseSharedCallsigns;
+	}
+
+	private void MergeDistanceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+	{
+		if (!(MergeDistanceComboBox.SelectedItem is int meters) || meters == _preferences.MergeDistanceMeters)
+		{
+			return;
+		}
+		_preferences.MergeDistanceMeters = meters;
+		try
+		{
+			_preferences.Save();
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+		{
+			AddMeshEvent("WARNING", "Could not save map preferences: " + ex.Message);
+		}
+		UpdateMapLayer();
 	}
 
 	private void PreferenceCheckBox_Changed(object sender, RoutedEventArgs e)
@@ -1840,6 +1911,34 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		_preferences.NotifyConnection = NotifyConnectionCheckBox.IsChecked == true;
 		_preferences.AutoReconnect = AutoReconnectCheckBox.IsChecked == true;
 		_preferences.ShowOnMap = ShowOnMapCheckBox.IsChecked == true;
+		_preferences.HideNodeOwnMarkers = HideNodeOwnMarkersCheckBox.IsChecked == true;
+		_preferences.ShowUnattendedNodes = ShowUnattendedNodesCheckBox.IsChecked == true;
+		bool wasSharing = _preferences.ShareCallsigns;
+		bool wasUsingShared = _preferences.UseSharedCallsigns;
+		_preferences.ShareCallsigns = ShareCallsignsCheckBox.IsChecked == true;
+		_preferences.UseSharedCallsigns = UseSharedCallsignsCheckBox.IsChecked == true;
+		if (_preferences.ShareCallsigns != wasSharing)
+		{
+			if (_preferences.ShareCallsigns)
+			{
+				ShareCallsigns(announce: true);
+			}
+			else
+			{
+				// An empty list tells other operators to drop the names this computer shared.
+				OpenMANET_PluginHost.BroadcastCallsigns(new List<OpenMANET_CallsignEntry>());
+				AddMeshEvent("INFO", "Stopped sharing callsigns; other operators running the plugin remove the ones you shared.");
+			}
+		}
+		if (_preferences.UseSharedCallsigns != wasUsingShared)
+		{
+			if (_preferences.UseSharedCallsigns)
+			{
+				OpenMANET_PluginHost.RequestSharedCallsigns();
+			}
+			ReapplyCallsigns();
+		}
+		UpdateCallsignSharingText();
 		UpdateMapLayer();
 		if (!_preferences.AutoReconnect)
 		{
@@ -1912,17 +2011,10 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			MessageBox.Show(ex.Message, "OpenMANET", MessageBoxButton.OK, MessageBoxImage.Exclamation);
 			return;
 		}
-		ApplyCallsigns(_lastNodes, _lastTopology);
-		if (NodeDetailsPanel.DataContext is OpenMANET_NodeInfo selected)
+		ReapplyCallsigns();
+		if (_preferences.ShareCallsigns)
 		{
-			RefreshNodeNameViews(selected);
-		}
-		else
-		{
-			NodesListBox.Items.Refresh();
-			LinkQualityNodeComboBox.Items.Refresh();
-			RenderTopology();
-			UpdateMapLayer();
+			ShareCallsigns(announce: false);
 		}
 		string summary = "Imported " + imported.ToString(CultureInfo.InvariantCulture) + ((imported == 1) ? " callsign" : " callsigns") + ((skipped > 0) ? ("; skipped " + skipped.ToString(CultureInfo.InvariantCulture) + " invalid " + ((skipped == 1) ? "line" : "lines")) : string.Empty) + ".";
 		AddMeshEvent("INFO", summary);
@@ -1967,9 +2059,200 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		ApplyCallsigns(_lastNodes, _lastTopology);
 		if (!string.Equals(oldName, node.DisplayName, StringComparison.Ordinal))
 		{
-			AddMeshEvent("INFO", node.HasCallsign ? (node.Name + " is now shown as " + node.Callsign + ".") : (oldName + " callsign cleared; showing hostname " + node.DisplayName + "."));
+			AddMeshEvent("INFO", node.HasCallsign ? (node.Name + " is now shown as " + node.Callsign + ".") : (oldName + " callsign cleared; showing " + node.DisplayName + "."));
 		}
 		RefreshNodeNameViews(node);
+		if (_preferences.ShareCallsigns)
+		{
+			ShareCallsigns(announce: false);
+		}
+	}
+
+	/// <summary>Reapplies saved and shared callsigns to the current nodes and redraws everything that shows names.</summary>
+	private void ReapplyCallsigns()
+	{
+		ApplyCallsigns(_lastNodes, _lastTopology);
+		if (NodeDetailsPanel.DataContext is OpenMANET_NodeInfo selected)
+		{
+			RefreshNodeNameViews(selected);
+		}
+		else
+		{
+			NodesListBox.Items.Refresh();
+			LinkQualityNodeComboBox.Items.Refresh();
+			RenderTopology();
+			UpdateMapLayer();
+		}
+	}
+
+	/// <summary>Shows only this computer's callsign in the editor; a shared one is described below it instead.</summary>
+	private void UpdateCallsignEditor(OpenMANET_NodeInfo node, bool keepTyping)
+	{
+		if (!keepTyping || !CallsignTextBox.IsKeyboardFocusWithin)
+		{
+			CallsignTextBox.Text = (node.CallsignSharedBy == null) ? (node.Callsign ?? string.Empty) : string.Empty;
+		}
+		CallsignCaptionText.Text = (node.CallsignSharedBy == null)
+			? "Vanity name shown instead of the hostname. Saved on this computer only."
+			: ("Shown as " + node.Callsign + ", shared by " + node.CallsignSharedBy + ". Save a callsign here to use your own instead.");
+	}
+
+	/// <summary>Broadcasts this computer's callsigns to other operators on the TAK network.</summary>
+	private void ShareCallsigns(bool announce)
+	{
+		_lastCallsignShareUtc = DateTimeOffset.UtcNow;
+		List<OpenMANET_CallsignEntry> saved = _callsigns.Entries;
+		List<OpenMANET_CallsignEntry> entries = ExpandForSharing(saved);
+		bool sent;
+		try
+		{
+			sent = OpenMANET_PluginHost.BroadcastCallsigns(entries);
+		}
+		catch (Exception ex)
+		{
+			AddMeshEvent("WARNING", "Could not share callsigns: " + OpenMANET_Security.OperatorMessage(ex));
+			return;
+		}
+		if (!sent)
+		{
+			if (announce)
+			{
+				AddMeshEvent("WARNING", "Callsigns can't be shared: WinTAK's network service isn't available.");
+			}
+			return;
+		}
+		if (announce)
+		{
+			AddMeshEvent("INFO", "Sharing " + saved.Count.ToString(CultureInfo.InvariantCulture) + ((saved.Count == 1) ? " callsign" : " callsigns") + " with other operators on your TAK network.");
+		}
+	}
+
+	/// <summary>
+	/// Each node shows different MACs depending on which node you ask (the connected node sees its
+	/// own interface MACs, others see its mesh MACs), so a shared callsign carries every MAC this
+	/// plugin knows for the node, plus its hostname, letting other operators match it from their side.
+	/// </summary>
+	private List<OpenMANET_CallsignEntry> ExpandForSharing(List<OpenMANET_CallsignEntry> saved)
+	{
+		List<OpenMANET_CallsignEntry> expanded = new List<OpenMANET_CallsignEntry>();
+		HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
+		foreach (OpenMANET_CallsignEntry entry in saved)
+		{
+			OpenMANET_NodeInfo node = _lastNodes.Find((OpenMANET_NodeInfo n) => (entry.Mac != null && (OpenMANET_CallsignStore.NormalizeMac(n.MacAddress) == entry.Mac || OpenMANET_CallsignStore.NormalizeMac(n.LinkHardwareAddress) == entry.Mac)) || (entry.Mac == null && entry.Hostname != null && OpenMANET_CallsignStore.NormalizeHostname(n.Name) == entry.Hostname));
+			string hostname = entry.Hostname ?? OpenMANET_CallsignStore.NormalizeHostname(node?.Name);
+			// Naming the node you're connected to marks you as its operator, which outranks other operators' names.
+			bool fromNodeOperator = node != null && node.IsSelf;
+			List<string> macs = new List<string> { entry.Mac };
+			if (node != null)
+			{
+				macs.Add(node.MacAddress);
+				macs.Add(node.LinkHardwareAddress);
+				OpenMANET_TopologyNodeInfo topologyNode = _lastTopology?.Nodes.FirstOrDefault((OpenMANET_TopologyNodeInfo t) => (node.IsSelf && t.IsSelf) || (hostname != null && OpenMANET_CallsignStore.NormalizeHostname(t.Hostname) == hostname) || (OpenMANET_CallsignStore.NormalizeMac(t.MacAddress) != null && OpenMANET_CallsignStore.NormalizeMac(t.MacAddress) == OpenMANET_CallsignStore.NormalizeMac(node.MacAddress)));
+				if (topologyNode != null)
+				{
+					macs.Add(topologyNode.MacAddress);
+					macs.AddRange(topologyNode.SecondaryMacs);
+				}
+			}
+			bool addedAny = false;
+			foreach (string mac in macs.Select(OpenMANET_CallsignStore.NormalizeMac).Where((string m) => m != null).Distinct())
+			{
+				if (seen.Add(mac))
+				{
+					expanded.Add(new OpenMANET_CallsignEntry { Mac = mac, Hostname = hostname, Callsign = entry.Callsign, UpdatedUtc = entry.UpdatedUtc, FromNodeOperator = fromNodeOperator });
+					addedAny = true;
+				}
+			}
+			if (!addedAny && hostname != null)
+			{
+				expanded.Add(new OpenMANET_CallsignEntry { Mac = null, Hostname = hostname, Callsign = entry.Callsign, UpdatedUtc = entry.UpdatedUtc, FromNodeOperator = fromNodeOperator });
+			}
+		}
+		return expanded;
+	}
+
+	private void CallsignSharing_Received(object sender, OpenMANET_CallsignsReceivedEventArgs e)
+	{
+		// Arrives on WinTAK's message thread.
+		Dispatcher.BeginInvoke((Action)(() =>
+		{
+			if (!_preferences.UseSharedCallsigns)
+			{
+				return;
+			}
+			AddMeshEvent("INFO", (e.Count == 0) ? (e.SharedBy + " stopped sharing callsigns.") : ("Received " + e.Count.ToString(CultureInfo.InvariantCulture) + ((e.Count == 1) ? " callsign" : " callsigns") + " from " + e.SharedBy + "."));
+			ReapplyCallsigns();
+			UpdateCallsignSharingText();
+		}));
+	}
+
+	private void PluginHost_CallsignsRequested(object sender, EventArgs e)
+	{
+		// Arrives on WinTAK's message thread.
+		Dispatcher.BeginInvoke((Action)(() =>
+		{
+			if (_preferences.ShareCallsigns && DateTimeOffset.UtcNow - _lastCallsignShareUtc >= OpenMANET_CallsignSharing.RequestAnswerInterval)
+			{
+				ShareCallsigns(announce: false);
+			}
+		}));
+	}
+
+	private void ForgetSharedCallsignsButton_Click(object sender, RoutedEventArgs e)
+	{
+		OpenMANET_PluginHost.CallsignSharing.Clear();
+		ReapplyCallsigns();
+		UpdateCallsignSharingText();
+		AddMeshEvent("INFO", "Forgot callsigns shared by other operators. They return when those operators share again.");
+	}
+
+	private void UpdateCallsignSharingText()
+	{
+		OpenMANET_CallsignSharing sharing = OpenMANET_PluginHost.CallsignSharing;
+		int senders = sharing.SenderCount;
+		int entries = sharing.EntryCount;
+		SharedCallsignsStatusText.Text = (senders == 0)
+			? "No callsigns received from other operators."
+			: ("Holding " + entries.ToString(CultureInfo.InvariantCulture) + ((entries == 1) ? " callsign" : " callsigns") + " from " + senders.ToString(CultureInfo.InvariantCulture) + ((senders == 1) ? " operator" : " operators") + (_preferences.UseSharedCallsigns ? "." : " (not shown while turned off)."));
+		ForgetSharedCallsignsButton.IsEnabled = senders > 0;
+	}
+
+	/// <summary>Opens the Nodes tab on the node whose map marker the operator picked.</summary>
+	private void PluginHost_NodeFocusRequested(object sender, string nodeKey)
+	{
+		OpenMANET_NodeInfo node = _lastNodes.Find((OpenMANET_NodeInfo n) => string.Equals(OpenMANET_MapLayer.NodeKey(n), nodeKey, StringComparison.Ordinal));
+		if (node == null)
+		{
+			return;
+		}
+		MainTabControl.SelectedIndex = 2;
+		NodesListBox.SelectedItem = node;
+		NodesListBox.ScrollIntoView(node);
+	}
+
+	/// <summary>Records each change in how a node is seen (status, route, RF link, neighbor table, hops).</summary>
+	private void RecordNodeTimelines(List<OpenMANET_NodeInfo> nodes)
+	{
+		DateTimeOffset now = DateTimeOffset.Now;
+		foreach (OpenMANET_NodeInfo node in nodes)
+		{
+			string key = GetNodeSelectionKey(node);
+			if (!_nodeTimelines.TryGetValue(key, out List<NodeTimelineEntry> timeline))
+			{
+				timeline = new List<NodeTimelineEntry>();
+				_nodeTimelines[key] = timeline;
+			}
+			NodeTimelineEntry entry = NodeTimelineEntry.FromNode(node, now);
+			if (timeline.Count == 0 || timeline[timeline.Count - 1].State != entry.State)
+			{
+				// Keep the first entry: it anchors the time since the node was first seen.
+				if (timeline.Count >= MaximumTimelineEntries)
+				{
+					timeline.RemoveAt(1);
+				}
+				timeline.Add(entry);
+			}
+		}
 	}
 
 	/// <summary>Node view models aren't observable, so rebind the views that show names.</summary>
@@ -1988,7 +2271,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		}
 		NodeDetailsPanel.DataContext = null;
 		NodeDetailsPanel.DataContext = selected;
-		CallsignTextBox.Text = selected.Callsign ?? string.Empty;
+		UpdateCallsignEditor(selected, keepTyping: false);
 		if (_lastTopology != null)
 		{
 			TopologyContent.DataContext = null;
@@ -2006,6 +2289,11 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			return "mac:" + node.MacAddress.Trim();
 		}
 		return "host:" + (node.Name ?? string.Empty).Trim();
+	}
+
+	private OpenMANET_NodeInfo FindNodeBySelectionKey(string key)
+	{
+		return _lastNodes.Find((OpenMANET_NodeInfo node) => string.Equals(GetNodeSelectionKey(node), key, StringComparison.OrdinalIgnoreCase));
 	}
 
 	private void ClearNodeDetails()
@@ -2515,6 +2803,28 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				stringBuilder.AppendLine("Services: Omitted from support snapshot");
 			}
 		}
+		AppendDiagnosticSection(stringBuilder, "NODE STATUS TIMELINE");
+		stringBuilder.AppendLine("Each line is a change in how the node is seen; +s is time since the node was first seen this session.");
+		if (_nodeTimelines.Count == 0)
+		{
+			stringBuilder.AppendLine("No node status recorded.");
+		}
+		foreach (KeyValuePair<string, List<NodeTimelineEntry>> timeline in _nodeTimelines)
+		{
+			OpenMANET_NodeInfo node = FindNodeBySelectionKey(timeline.Key);
+			string rawName = node?.Name ?? timeline.Key.Substring(timeline.Key.IndexOf(':') + 1);
+			stringBuilder.AppendLine(includeOperationalIdentifiers ? DiagnosticText(rawName, includeOperationalIdentifiers: true, openMANET_DiagnosticRedactor) : openMANET_DiagnosticRedactor.Alias(rawName, "Node"));
+			DateTimeOffset firstSeen = timeline.Value[0].CapturedAt;
+			foreach (NodeTimelineEntry entry in timeline.Value)
+			{
+				stringBuilder.AppendLine("  " + entry.CapturedAt.ToString("HH:mm:ss", CultureInfo.InvariantCulture) + " (+" + ((int)(entry.CapturedAt - firstSeen).TotalSeconds).ToString(CultureInfo.InvariantCulture) + " s) " + entry.State + " | " + entry.Detail);
+			}
+		}
+		AppendDiagnosticSection(stringBuilder, "CALLSIGN SHARING");
+		stringBuilder.AppendLine("Share mine over TAK: " + (_preferences.ShareCallsigns ? "on" : "off") + (OpenMANET_PluginHost.CanShareCallsigns ? string.Empty : " (WinTAK network service unavailable)"));
+		stringBuilder.AppendLine("Use shared callsigns: " + (_preferences.UseSharedCallsigns ? "on" : "off"));
+		stringBuilder.AppendLine("Saved on this computer: " + _callsigns.Count.ToString(CultureInfo.InvariantCulture));
+		stringBuilder.AppendLine("Received: " + OpenMANET_PluginHost.CallsignSharing.EntryCount.ToString(CultureInfo.InvariantCulture) + " from " + OpenMANET_PluginHost.CallsignSharing.SenderCount.ToString(CultureInfo.InvariantCulture) + " operators");
 		AppendDiagnosticSection(stringBuilder, "RECENT MESH EVENTS");
 		if (_meshEvents.Count == 0)
 		{
@@ -2735,6 +3045,9 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	private void Dispatcher_ShutdownStarted(object sender, EventArgs e)
 	{
 		Dispatcher.ShutdownStarted -= Dispatcher_ShutdownStarted;
+		OpenMANET_PluginHost.CallsignSharing.Received -= CallsignSharing_Received;
+		OpenMANET_PluginHost.NodeFocusRequested -= PluginHost_NodeFocusRequested;
+		OpenMANET_PluginHost.CallsignsRequested -= PluginHost_CallsignsRequested;
 		_autoRefreshTimer.Stop();
 		_throughputTimer.Stop();
 		CancelOutstandingOperations();

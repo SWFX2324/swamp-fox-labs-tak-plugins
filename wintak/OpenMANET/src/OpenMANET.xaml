@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <UserControl x:Class="WinTAK_OpenMANET_Plugin.OpenMANET"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -1186,7 +1186,7 @@
                     <Button Name="SaveCallsignButton" Grid.Column="2" Height="36" Padding="14,0" Style="{StaticResource PrimaryButtonStyle}" Content="Save" />
                     <Button Name="ClearCallsignButton" Grid.Column="4" Height="36" Padding="12,0" Content="Clear" />
                   </Grid>
-                  <TextBlock Text="Vanity name shown instead of the hostname. Saved on this computer only." Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,16" />
+                  <TextBlock Name="CallsignCaptionText" Text="Vanity name shown instead of the hostname. Saved on this computer only." Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,16" />
 
                   <TextBlock Text="IDENTITY" Style="{StaticResource EyebrowTextStyle}" Margin="0,0,0,8" />
                   <Grid Margin="0,0,0,10">
@@ -1647,17 +1647,47 @@
                 <CheckBox Name="ShowOnMapCheckBox">
                   <TextBlock Text="Show mesh nodes and links on the map" FontSize="11.5" TextWrapping="Wrap" />
                 </CheckBox>
-                <TextBlock Text="Markers use each node's callsign; links are colored by quality (green, amber, red; BLOS dashed orange). They stay on this computer and are never sent to your TAK server or other users." Style="{StaticResource CaptionTextStyle}" Margin="28,4,0,0" />
+                <TextBlock Text="Each node is shown as the TAK user at it, using that user's own WinTAK marker, with link lines between them colored by quality (green, amber, red; BLOS dashed orange). Choosing OpenMANET on that user's radial menu opens the node. Lines stay on this computer and are never sent to your TAK server or other users." Style="{StaticResource CaptionTextStyle}" Margin="28,4,0,0" />
+                <CheckBox Name="HideNodeOwnMarkersCheckBox" Margin="0,10,0,0">
+                  <TextBlock Text="Hide the markers nodes broadcast for themselves" FontSize="11.5" TextWrapping="Wrap" />
+                </CheckBox>
+                <TextBlock Text="Nodes with COT OUT turned on send their own radio marker. For every node the plugin has a position for, that marker is hidden, so nodes don't add icons of their own." Style="{StaticResource CaptionTextStyle}" Margin="28,4,0,0" />
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                  <TextBlock Text="A TAK user is at a node within" VerticalAlignment="Center" FontSize="11.5" Margin="0,0,8,0" />
+                  <ComboBox Name="MergeDistanceComboBox" Width="80" ItemStringFormat="{}{0} m" />
+                </StackPanel>
+                <TextBlock Text="Measured from the node's GPS to the TAK user's position. Nodes with nobody this close aren't drawn, and neither are their links." Style="{StaticResource CaptionTextStyle}" Margin="0,4,0,0" />
+                <CheckBox Name="ShowUnattendedNodesCheckBox" Margin="0,10,0,0">
+                  <TextBlock Text="Draw radio icons for nodes nobody is at" FontSize="11.5" TextWrapping="Wrap" />
+                </CheckBox>
+                <TextBlock Text="Off by default. Turn on to see relays and other unattended nodes, and the links to them, as radio icons." Style="{StaticResource CaptionTextStyle}" Margin="28,4,0,0" />
               </StackPanel>
             </GroupBox>
             <GroupBox>
               <GroupBox.Header>
                 <StackPanel>
                   <TextBlock Text="Callsigns" />
-                  <TextBlock Text="Share node callsigns with other operators" Style="{StaticResource CaptionTextStyle}" FontWeight="Normal" Margin="0,2,0,0" />
+                  <TextBlock Text="Share node callsigns with other operators over TAK or as a file" Style="{StaticResource CaptionTextStyle}" FontWeight="Normal" Margin="0,2,0,0" />
                 </StackPanel>
               </GroupBox.Header>
               <StackPanel>
+                <CheckBox Name="ShareCallsignsCheckBox" Margin="0,0,0,4" ToolTip="Broadcasts the callsigns saved on this computer, with each node's MAC address and hostname, to everyone on your TAK network. Repeated every minute, whenever you change a callsign, and when another operator turns on shared callsigns.">
+                  <TextBlock Text="Share my callsigns over TAK" FontSize="11.5" TextWrapping="Wrap" />
+                </CheckBox>
+                <TextBlock Text="Sends your callsigns, with each node's MAC address and hostname, to everyone on your TAK network. Turning this off asks other operators to remove them." Style="{StaticResource CaptionTextStyle}" Margin="28,0,0,10" />
+                <CheckBox Name="UseSharedCallsignsCheckBox" Margin="0,0,0,4" ToolTip="Shows callsigns other operators share, for nodes you haven't named yourself. Callsigns saved on this computer always take precedence.">
+                  <TextBlock Text="Use callsigns shared by other operators" FontSize="11.5" TextWrapping="Wrap" />
+                </CheckBox>
+                <TextBlock Text="Only fills in nodes you haven't named; your own callsigns always win. Among operators, the one connected to a node has the final say on its name. Anyone on your TAK network can share names." Style="{StaticResource CaptionTextStyle}" Margin="28,0,0,6" />
+                <Grid Margin="28,0,0,14">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Name="SharedCallsignsStatusText" Text="No callsigns received from other operators." Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  <Button Name="ForgetSharedCallsignsButton" Grid.Column="2" Height="30" Padding="12,0" Content="Forget Shared" />
+                </Grid>
                 <TextBlock Text="Export saves your callsigns to a CSV file. Import merges a file into yours; entries for the same node are replaced." Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,12" />
                 <Grid>
                   <Grid.ColumnDefinitions>

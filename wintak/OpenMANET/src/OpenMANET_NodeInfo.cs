@@ -13,6 +13,9 @@ internal sealed class OpenMANET_NodeInfo
 
 	public bool HasCallsign => !string.IsNullOrWhiteSpace(Callsign);
 
+	/// <summary>Set when <see cref="Callsign"/> came from another operator rather than this computer.</summary>
+	public string CallsignSharedBy { get; set; }
+
 	public string DisplayName
 	{
 		get

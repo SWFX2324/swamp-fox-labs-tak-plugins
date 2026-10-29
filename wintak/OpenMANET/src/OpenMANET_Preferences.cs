@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -6,7 +6,7 @@ using System.Text;
 
 namespace WinTAK_OpenMANET_Plugin;
 
-/// <summary>Alert, reconnect and map preferences, stored as key=value lines next to connection.settings.</summary>
+/// <summary>Alert, reconnect, map and callsign-sharing preferences, stored as key=value lines next to connection.settings.</summary>
 internal sealed class OpenMANET_Preferences
 {
 	private const long MaximumFileBytes = 4096;
@@ -25,6 +25,28 @@ internal sealed class OpenMANET_Preferences
 
 	public bool ShowOnMap { get; set; } = true;
 
+	// Hide the marker a node broadcasts for itself (COT OUT) while the plugin draws that node.
+	public bool HideNodeOwnMarkers { get; set; } = true;
+
+	// Radio icons for nodes nobody is at. Off: the map shows only TAK users' own markers, each node drawn as the user at it.
+	public bool ShowUnattendedNodes { get; set; }
+
+	public static readonly int[] MergeDistanceChoices = { 10, 25, 50, 100 };
+
+	private int _mergeDistanceMeters = 25;
+
+	/// <summary>How close a TAK user must be to a node to stand in for it; one of <see cref="MergeDistanceChoices"/>.</summary>
+	public int MergeDistanceMeters
+	{
+		get => _mergeDistanceMeters;
+		set => _mergeDistanceMeters = (Array.IndexOf(MergeDistanceChoices, value) >= 0) ? value : 25;
+	}
+
+	// Callsign sharing over TAK is opt-in both ways: it sends node identifiers to other users.
+	public bool ShareCallsigns { get; set; }
+
+	public bool UseSharedCallsigns { get; set; }
+
 	public OpenMANET_Preferences(string filePath)
 	{
 		_filePath = filePath;
@@ -39,12 +61,17 @@ internal sealed class OpenMANET_Preferences
 				return;
 			}
 			Dictionary<string, bool> values = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+			Dictionary<string, int> numbers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 			foreach (string line in File.ReadAllLines(_filePath, Encoding.UTF8))
 			{
 				int separator = line.IndexOf('=');
 				if (separator > 0 && bool.TryParse(line.Substring(separator + 1).Trim(), out bool value))
 				{
 					values[line.Substring(0, separator).Trim()] = value;
+				}
+				else if (separator > 0 && int.TryParse(line.Substring(separator + 1).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int number))
+				{
+					numbers[line.Substring(0, separator).Trim()] = number;
 				}
 			}
 			NotifyNodes = Get(values, nameof(NotifyNodes), NotifyNodes);
@@ -53,6 +80,14 @@ internal sealed class OpenMANET_Preferences
 			NotifyConnection = Get(values, nameof(NotifyConnection), NotifyConnection);
 			AutoReconnect = Get(values, nameof(AutoReconnect), AutoReconnect);
 			ShowOnMap = Get(values, nameof(ShowOnMap), ShowOnMap);
+			HideNodeOwnMarkers = Get(values, nameof(HideNodeOwnMarkers), HideNodeOwnMarkers);
+			ShowUnattendedNodes = Get(values, nameof(ShowUnattendedNodes), ShowUnattendedNodes);
+			if (numbers.TryGetValue(nameof(MergeDistanceMeters), out int distance))
+			{
+				MergeDistanceMeters = distance;
+			}
+			ShareCallsigns = Get(values, nameof(ShareCallsigns), ShareCallsigns);
+			UseSharedCallsigns = Get(values, nameof(UseSharedCallsigns), UseSharedCallsigns);
 		}
 		catch
 		{
@@ -74,7 +109,12 @@ internal sealed class OpenMANET_Preferences
 			Line(nameof(NotifyGateway), NotifyGateway),
 			Line(nameof(NotifyConnection), NotifyConnection),
 			Line(nameof(AutoReconnect), AutoReconnect),
-			Line(nameof(ShowOnMap), ShowOnMap)
+			Line(nameof(ShowOnMap), ShowOnMap),
+			Line(nameof(HideNodeOwnMarkers), HideNodeOwnMarkers),
+			Line(nameof(ShowUnattendedNodes), ShowUnattendedNodes),
+			nameof(MergeDistanceMeters) + "=" + MergeDistanceMeters.ToString(CultureInfo.InvariantCulture),
+			Line(nameof(ShareCallsigns), ShareCallsigns),
+			Line(nameof(UseSharedCallsigns), UseSharedCallsigns)
 		}, new UTF8Encoding(false));
 	}
 

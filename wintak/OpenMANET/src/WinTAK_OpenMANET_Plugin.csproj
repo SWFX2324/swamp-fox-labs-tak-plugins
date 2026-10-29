@@ -31,6 +31,18 @@
       <HintPath>$(WinTakDir)\WinTak.Common.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="WinTak.Display">
+      <HintPath>$(WinTakDir)\WinTak.Display.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="WinTak.Graphics">
+      <HintPath>$(WinTakDir)\WinTak.Graphics.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Spyglass.Graphics">
+      <HintPath>$(WinTakDir)\Spyglass.Graphics.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Prism">
       <HintPath>$(WinTakDir)\Prism.dll</HintPath>
       <Private>false</Private>

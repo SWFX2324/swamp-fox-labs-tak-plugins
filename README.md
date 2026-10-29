@@ -1,3 +1,5 @@
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/swamp-fox-labs-logo-dark.svg"><img src="assets/swamp-fox-labs-logo-light.svg" width="420" alt="Swamp Fox Labs"></picture></p>
+
 # Swamp Fox Labs TAK Plugins
 
 Plugins for the TAK (Team Awareness Kit) ecosystem from Swamp Fox Labs.
@@ -16,9 +18,9 @@ A docked WinTAK pane for operators running an OpenMANET mesh:
 
 - **Dashboard:** nodes online, mesh bandwidth, throughput and utilization, plus the node list and an event log.
 - **Topology:** a live map of nodes and links from the connected node, including BLOS links.
-- **Nodes:** per-node RSSI, link quality, routing, 60-minute trends, and optional vanity callsigns.
+- **Nodes:** per-node RSSI, link quality, routing, 60-minute trends, and optional vanity callsigns that operators can share over TAK.
 - **System:** health findings, CPU, memory, storage, temperature and interfaces on the connected node.
-- **Map:** mesh nodes and quality-colored links on the WinTAK map, from each node's GPS.
+- **Map:** each node is shown as the TAK user at it, using WinTAK's own markers, with quality-colored link lines between them. Click a user's marker to open their node in the pane.
 - **Alerts:** WinTAK notifications for node, link, gateway and connection changes, a health dot on the toolbar icon, and automatic reconnect.
 - **Diagnostics:** redacted or full snapshots for troubleshooting. Credentials are never included.
 
