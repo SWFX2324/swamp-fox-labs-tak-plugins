@@ -44,8 +44,19 @@ Node status:
 
 ## Requirements
 
-- WinTAK 5.7.0.144 (x64)
+- WinTAK 5.7 or 5.8 (x64). See [Supported WinTAK versions](#supported-wintak-versions).
 - An OpenMANET node reachable from the WinTAK machine. HTTPS on port 8081 is the default; legacy HTTP on port 8087 is available as an opt-in.
+
+## Supported WinTAK versions
+
+| WinTAK | Status |
+| --- | --- |
+| 5.8 (5.8.0.149) | Supported: field-tested, and builds and passes the offline tests against the 5.8 SDK |
+| 5.7 (5.7.0.144) | Supported: the package is built against this SDK |
+
+One package works in both; the `5.7.0.144` in its file name is the SDK it was built against, not a limit.
+
+Policy: the plugin supports the current WinTAK release and the one before it. When a new WinTAK ships, a compatible build follows within about 30 days of its SDK becoming available, and the oldest version is dropped at the next plugin release, announced in the release notes beforehand. If a WinTAK release ever breaks compatibility, each supported version gets its own package. Fixes go into the latest plugin release only.
 
 ## Install
 
@@ -70,7 +81,7 @@ Full notes and downloads are on the [Releases](https://github.com/SWFX2324/swamp
 
 ## Build
 
-You need the .NET SDK and WinTAK 5.7.0.144 installed (the build references its SDK assemblies).
+You need the .NET SDK and a supported WinTAK installed (the build references its SDK assemblies). Release packages are built against the oldest supported WinTAK. Point `-WinTakDir` at a copy of another version's install folder to build or test against it; `tests\Run-Tests.ps1` takes the same parameter.
 
 ```powershell
 .\build.ps1                                # default WinTAK path: C:\Program Files\WinTAK
