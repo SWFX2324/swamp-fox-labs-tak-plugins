@@ -52,7 +52,7 @@ Node status:
 | WinTAK | Status |
 | --- | --- |
 | 5.8 (5.8.0.149) | Supported: field-tested, and builds and passes the offline tests against the 5.8 SDK |
-| 5.7 (5.7.0.144) | Supported: the package is built against this SDK |
+| 5.7 (5.7.0.144, 5.7.0.149) | Supported: release packages are built and tested against the 5.7 SDK |
 
 One package works in both; the `5.7.0.144` in its file name is the SDK it was built against, not a limit.
 
@@ -81,7 +81,14 @@ Full notes and downloads are on the [Releases](https://github.com/SWFX2324/swamp
 
 ## Build
 
-You need the .NET SDK and a supported WinTAK installed (the build references its SDK assemblies). Release packages are built against the oldest supported WinTAK. Point `-WinTakDir` at a copy of another version's install folder to build or test against it; `tests\Run-Tests.ps1` takes the same parameter.
+You need the .NET SDK and a supported WinTAK installed (the build references its SDK assemblies). Release packages are built against the oldest supported WinTAK: when `C:\WinTAK-SDK\5.7.0.149` exists, `build.ps1` and `tests\Run-Tests.ps1` use it by default, otherwise the installed WinTAK. Point `-WinTakDir` at another version's folder to build or test against it; both scripts take the parameter.
+
+To set up that folder without touching your installed WinTAK, unpack the 5.7 SDK installer and copy its files with an MSI administrative install:
+
+```powershell
+.\WinTAK-5.7.0.149-civ-sdk-installer-x64.exe /extract:"$env:TEMP\wt57"
+msiexec /a "$env:TEMP\wt57\WinTAK_Civ_SDK_x64.msi" /qn TARGETDIR="C:\WinTAK-SDK\5.7.0.149"
+```
 
 ```powershell
 .\build.ps1                                # default WinTAK path: C:\Program Files\WinTAK

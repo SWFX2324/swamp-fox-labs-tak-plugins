@@ -7,7 +7,8 @@
 #>
 param(
     [string]$Configuration = "Release",
-    [string]$WinTakDir = "C:\Program Files\WinTAK"
+    # Releases build against the oldest supported WinTAK, kept unpacked under C:\WinTAK-SDK; otherwise the installed one.
+    [string]$WinTakDir = $(if (Test-Path "C:\WinTAK-SDK\5.7.0.149\WinTak.Common.dll") { "C:\WinTAK-SDK\5.7.0.149" } else { "C:\Program Files\WinTAK" })
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +16,7 @@ $root = $PSScriptRoot
 $src = Join-Path $root "src"
 $dist = Join-Path $root "dist"
 
+Write-Host "Building against the WinTAK SDK in $WinTakDir"
 dotnet build (Join-Path $src "WinTAK_OpenMANET_Plugin.csproj") -c $Configuration "-p:WinTakDir=$WinTakDir"
 if ($LASTEXITCODE -ne 0) { throw "Build failed." }
 

@@ -10,7 +10,8 @@
 #>
 param(
     [string]$Dll = (Join-Path $PSScriptRoot "..\src\bin\Release\WinTAK_OpenMANET_Plugin.dll"),
-    [string]$WinTakDir = "C:\Program Files\WinTAK"
+    # Same SDK as build.ps1: the oldest supported WinTAK when it's unpacked under C:\WinTAK-SDK.
+    [string]$WinTakDir = $(if (Test-Path "C:\WinTAK-SDK\5.7.0.149\WinTak.Common.dll") { "C:\WinTAK-SDK\5.7.0.149" } else { "C:\Program Files\WinTAK" })
 )
 
 $Dll = (Resolve-Path $Dll).Path
