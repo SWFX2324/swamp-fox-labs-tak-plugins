@@ -103,6 +103,40 @@ internal sealed class OpenMANET_NodeInfo
 
 	public bool HasPosition => Latitude.HasValue && Longitude.HasValue;
 
+	// Fix quality is only reported by the connected node's own receiver; other nodes announce just a position.
+	public double? GpsHdop { get; set; }
+
+	public int? GpsSatellitesUsed { get; set; }
+
+	public int? GpsSatellitesInView { get; set; }
+
+	/// <summary>HDOP at or above this means positions can be tens of meters off.</summary>
+	public const double PoorHdop = 5.0;
+
+	public bool HasPoorGpsFix => HasPosition && GpsHdop.HasValue && GpsHdop.Value >= PoorHdop;
+
+	public string GpsQualityDisplay
+	{
+		get
+		{
+			if (!IsSelf)
+			{
+				return "Reported for the connected node only";
+			}
+			string satellites = GpsSatellitesUsed.HasValue ? (GpsSatellitesUsed.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + " of " + (GpsSatellitesInView ?? GpsSatellitesUsed.Value).ToString(System.Globalization.CultureInfo.InvariantCulture) + " satellites") : null;
+			if (!HasPosition)
+			{
+				return "No fix" + ((GpsSatellitesInView ?? 0) > 0 ? (" · " + GpsSatellitesInView.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + " satellites in view") : string.Empty);
+			}
+			if (!GpsHdop.HasValue)
+			{
+				return satellites ?? "Not reported";
+			}
+			string label = (GpsHdop.Value < 2.0) ? "Good" : ((GpsHdop.Value < PoorHdop) ? "Moderate" : "Poor");
+			return label + " · HDOP " + GpsHdop.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + ((satellites != null) ? (" · " + satellites) : string.Empty);
+		}
+	}
+
 	public string PositionDisplay
 	{
 		get

@@ -81,6 +81,20 @@ internal sealed class OpenMANET_Client : IDisposable
 	{
 		[DataMember(Name = "position")]
 		public GnssPositionResponse Position { get; set; }
+
+		[DataMember(Name = "satelliteStatus")]
+		public GnssSatelliteStatusResponse SatelliteStatus { get; set; }
+	}
+
+	/// <summary>Satellites the connected node's receiver sees and uses (openmanet.gnss.v1.SatelliteStatus).</summary>
+	[DataContract]
+	private sealed class GnssSatelliteStatusResponse
+	{
+		[DataMember(Name = "satellitesUsed")]
+		public int SatellitesUsed { get; set; }
+
+		[DataMember(Name = "satellitesInView")]
+		public int SatellitesInView { get; set; }
 	}
 
 	/// <summary>The connected node's own fix (openmanet.gnss.v1.Position).</summary>
@@ -98,6 +112,10 @@ internal sealed class OpenMANET_Client : IDisposable
 
 		[DataMember(Name = "altitude")]
 		public double Altitude { get; set; }
+
+		// Horizontal dilution of precision; 0 when the receiver doesn't report it.
+		[DataMember(Name = "hdop")]
+		public double Hdop { get; set; }
 	}
 
 	[DataContract]
@@ -403,6 +421,8 @@ internal sealed class OpenMANET_Client : IDisposable
 
 	private GnssPositionResponse _selfPosition;
 
+	private GnssSatelliteStatusResponse _selfSatellites;
+
 	private DateTimeOffset? _topologyFetchedUtc;
 
 	private DateTimeOffset? _neighborsFetchedUtc;
@@ -617,6 +637,7 @@ internal sealed class OpenMANET_Client : IDisposable
 		// without a fix, simply leaves it off rather than reporting partial data.
 		GnssPositionResponse gnssPosition = (gnssTask.Status == TaskStatus.RanToCompletion) ? gnssTask.Result?.Position : null;
 		_selfPosition = (gnssPosition != null && (gnssPosition.FixType == "FIX_TYPE_2D" || gnssPosition.FixType == "FIX_TYPE_3D")) ? gnssPosition : null;
+		_selfSatellites = (gnssTask.Status == TaskStatus.RanToCompletion) ? gnssTask.Result?.SatelliteStatus : null;
 		ListNodesResponse knownNodes = _lastKnownNodes;
 		MeshTopology topology = _lastTopologyResponse;
 		LastTopology = CreateTopologyInfo(topology);
@@ -994,7 +1015,10 @@ internal sealed class OpenMANET_Client : IDisposable
 			DirectLinkCount = neighborCount,
 			Latitude = _selfPosition?.Latitude,
 			Longitude = _selfPosition?.Longitude,
-			Altitude = _selfPosition?.Altitude
+			Altitude = _selfPosition?.Altitude,
+			GpsHdop = (_selfPosition != null && _selfPosition.Hdop > 0.0) ? _selfPosition.Hdop : (double?)null,
+			GpsSatellitesUsed = _selfSatellites?.SatellitesUsed,
+			GpsSatellitesInView = _selfSatellites?.SatellitesInView
 		};
 	}
 

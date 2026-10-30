@@ -1224,6 +1224,7 @@
                       <RowDefinition Height="Auto" />
                       <RowDefinition Height="Auto" />
                       <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Status" Style="{StaticResource LabelTextStyle}" />
                     <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource ValueTextStyle}" FontWeight="SemiBold" Text="{Binding StatusDisplay}" />
@@ -1249,6 +1250,18 @@
                     <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource ValueTextStyle}" Text="{Binding LastPollDisplay}" />
                     <TextBlock Grid.Row="6" Text="GPS position" Style="{StaticResource LabelTextStyle}" />
                     <TextBlock Grid.Row="6" Grid.Column="1" Style="{StaticResource ValueTextStyle}" Text="{Binding PositionDisplay}" />
+                    <TextBlock Grid.Row="7" Text="GPS quality" Style="{StaticResource LabelTextStyle}" />
+                    <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding GpsQualityDisplay}" TextWrapping="Wrap">
+                      <TextBlock.Style>
+                        <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource ValueTextStyle}">
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasPoorGpsFix}" Value="True">
+                              <Setter Property="Foreground" Value="{StaticResource WarningBrush}" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </TextBlock.Style>
+                    </TextBlock>
                   </Grid>
 
                   <TextBlock Text="LINK" Style="{StaticResource EyebrowTextStyle}" Margin="0,0,0,8" />

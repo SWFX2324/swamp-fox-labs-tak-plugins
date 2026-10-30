@@ -254,6 +254,15 @@ public partial class OpenMANET : UserControl, IComponentConnector
 	// Set once polling has failed for UnreachableAfter, so stale data is not shown as current.
 	private bool _nodesMarkedUnreachable;
 
+	// Another node whose GPS WinTAK's position has matched for consecutive polls, and how many.
+	private string _borrowedGpsNodeKey;
+
+	private int _borrowedGpsPolls;
+
+	private OpenMANET_NodeInfo _borrowedGpsSource;
+
+	private bool _poorGpsLogged;
+
 	private static readonly TimeSpan UnreachableAfter = TimeSpan.FromSeconds(45.0);
 
 	private readonly DispatcherTimer _autoRefreshTimer;
@@ -768,6 +777,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			UpdateOperationalEvents(_client.LastTopology, _client.LastSystemDetails);
 			CaptureNodeTrendSamples(list);
 			_lastNodes = list;
+			UpdateGpsChecks(list);
 			_lastSuccessfulRefreshUtc = DateTimeOffset.UtcNow;
 			if (_nodesMarkedUnreachable)
 			{
@@ -1494,6 +1504,38 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		return "none";
 	}
 
+	/// <summary>Tracks the connected node's fix quality and whether WinTAK is using another node's GPS, once per poll.</summary>
+	private void UpdateGpsChecks(List<OpenMANET_NodeInfo> nodes)
+	{
+		OpenMANET_NodeInfo connected = nodes.Find((OpenMANET_NodeInfo n) => n.IsSelf);
+		bool poor = connected != null && connected.HasPoorGpsFix;
+		if (poor && !_poorGpsLogged)
+		{
+			AddMeshEvent("WARNING", PoorGpsMessage(connected));
+		}
+		_poorGpsLogged = poor;
+		OpenMANET_NodeInfo source = OpenMANET_GpsCheck.FindBorrowedGpsSource(nodes, OpenMANET_Operators.Self());
+		string key = (source != null) ? OpenMANET_MapLayer.NodeKey(source) : null;
+		_borrowedGpsPolls = (key == null) ? 0 : ((key == _borrowedGpsNodeKey) ? (_borrowedGpsPolls + 1) : 1);
+		_borrowedGpsNodeKey = key;
+		if (_borrowedGpsPolls == OpenMANET_GpsCheck.PollsBeforeReporting)
+		{
+			AddMeshEvent("WARNING", BorrowedGpsMessage(source, connected));
+		}
+		_borrowedGpsSource = (_borrowedGpsPolls >= OpenMANET_GpsCheck.PollsBeforeReporting) ? source : null;
+	}
+
+	private static string PoorGpsMessage(OpenMANET_NodeInfo node)
+	{
+		return node.DisplayName + "'s GPS fix is poor (" + node.GpsQualityDisplay.Replace("Poor · ", string.Empty) + "). Positions can be off by tens of meters; give its GPS antenna a clear view of the sky.";
+	}
+
+	private static string BorrowedGpsMessage(OpenMANET_NodeInfo source, OpenMANET_NodeInfo connected)
+	{
+		string connectedName = connected?.DisplayName ?? "the connected node";
+		return "WinTAK's position matches " + source.DisplayName + "'s GPS, not " + connectedName + "'s" + ((connected != null && !connected.HasPosition) ? " (" + connectedName + " has no fix)" : string.Empty) + ". With Network Provided GPS, WinTAK takes NMEA from any node that sends it, and nodes send it to every device in their DHCP lease list. See the plugin README's node GPS section.";
+	}
+
 	private void UpdateHealthFindings()
 	{
 		_healthFindings.Clear();
@@ -1566,6 +1608,16 @@ public partial class OpenMANET : UserControl, IComponentConnector
 				bool flag3 = _utilizationState == "Critical";
 				AddHealthFinding("Estimated mesh utilization is " + _currentUtilizationPercent.Value.ToString("0.0", CultureInfo.InvariantCulture) + "%.", flag3 ? DangerIndicatorBrush : WarningIndicatorBrush, flag3);
 				flag2 = true;
+			}
+			// GPS findings are advisory: they don't change mesh health or the toolbar badge.
+			OpenMANET_NodeInfo connectedNode = _lastNodes.Find((OpenMANET_NodeInfo n) => n.IsSelf);
+			if (connectedNode != null && connectedNode.HasPoorGpsFix)
+			{
+				AddHealthFinding(PoorGpsMessage(connectedNode), WarningIndicatorBrush, critical: false);
+			}
+			if (_borrowedGpsSource != null)
+			{
+				AddHealthFinding(BorrowedGpsMessage(_borrowedGpsSource, connectedNode), WarningIndicatorBrush, critical: false);
 			}
 			OpenMANET_SystemInfo lastSystemDetails = _client.LastSystemDetails;
 			SystemStateSnapshot systemState = _previousSystemState;
@@ -2982,6 +3034,10 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		_bandwidthIsLow = null;
 		_utilizationState = null;
 		_currentUtilizationPercent = null;
+		_borrowedGpsNodeKey = null;
+		_borrowedGpsPolls = 0;
+		_borrowedGpsSource = null;
+		_poorGpsLogged = false;
 		_mapLayer.Clear(synchronous: false);
 		NodesListBox.ItemsSource = null;
 		NodesListBox.SelectedItem = null;

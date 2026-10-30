@@ -69,22 +69,33 @@ internal static class OpenMANET_Operators
 		return true;
 	}
 
-	/// <summary>Every operator with a current position, this one first.</summary>
-	public static List<OpenMANET_OperatorPosition> Current(DateTime nowUtc)
+	/// <summary>This operator's position from WinTAK's location service, or null when WinTAK has none.</summary>
+	public static OpenMANET_OperatorPosition Self()
 	{
-		List<OpenMANET_OperatorPosition> result = new List<OpenMANET_OperatorPosition>();
 		try
 		{
 			if (_selfPositionProvider != null && TryParse(_selfPositionProvider(), out OpenMANET_OperatorPosition self, out DateTime _, requireClient: false))
 			{
-				result.Add(self);
+				return self;
 			}
 		}
 		catch
 		{
 			// Without our own position, nodes just aren't merged into our marker.
 		}
-		string selfUid = (result.Count > 0) ? result[0].Uid : null;
+		return null;
+	}
+
+	/// <summary>Every operator with a current position, this one first.</summary>
+	public static List<OpenMANET_OperatorPosition> Current(DateTime nowUtc)
+	{
+		List<OpenMANET_OperatorPosition> result = new List<OpenMANET_OperatorPosition>();
+		OpenMANET_OperatorPosition self = Self();
+		if (self != null)
+		{
+			result.Add(self);
+		}
+		string selfUid = self?.Uid;
 		lock (OperatorsLock)
 		{
 			RemoveStale(nowUtc);
