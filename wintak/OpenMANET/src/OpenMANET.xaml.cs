@@ -183,6 +183,10 @@ public partial class OpenMANET : UserControl, IComponentConnector
 
 	private static readonly TimeSpan ThroughputWindow = TimeSpan.FromSeconds(60.0);
 
+	// Utilization is judged on throughput averaged over this window. Mesh traffic is bursty enough to
+	// cross the whole hysteresis band between single 5 s samples, which made the alerts flap.
+	private static readonly TimeSpan UtilizationWindow = TimeSpan.FromSeconds(30.0);
+
 	private static readonly TimeSpan BandwidthWindow = TimeSpan.FromSeconds(60.0);
 
 	private static readonly TimeSpan NodeTrendWindow = TimeSpan.FromMinutes(60.0);
@@ -1221,6 +1225,27 @@ public partial class OpenMANET : UserControl, IComponentConnector
 		_meshInterfaceAvailable = available;
 	}
 
+	/// <summary>Throughput averaged over the last <see cref="UtilizationWindow"/> of samples, or the current reading without any.</summary>
+	private double UtilizationThroughputMbps()
+	{
+		if (_throughputSamples.Count == 0)
+		{
+			return _currentThroughputMbps.GetValueOrDefault();
+		}
+		DateTimeOffset cutoff = _throughputSamples[_throughputSamples.Count - 1].CapturedAtUtc - UtilizationWindow;
+		double total = 0.0;
+		int count = 0;
+		foreach (ThroughputSample sample in _throughputSamples)
+		{
+			if (sample.CapturedAtUtc >= cutoff)
+			{
+				total += sample.RxMegabitsPerSecond + sample.TxMegabitsPerSecond;
+				count++;
+			}
+		}
+		return (count == 0) ? _currentThroughputMbps.GetValueOrDefault() : total / count;
+	}
+
 	private void UpdateUtilization()
 	{
 		if (!_currentBandwidthMbps.HasValue || !_currentThroughputMbps.HasValue || _currentBandwidthMbps.Value <= 0.0)
@@ -1233,7 +1258,7 @@ public partial class OpenMANET : UserControl, IComponentConnector
 			UtilizationStatusText.Text = "Waiting for bandwidth and throughput samples";
 			return;
 		}
-		double num = 100.0 * _currentThroughputMbps.Value / _currentBandwidthMbps.Value;
+		double num = 100.0 * UtilizationThroughputMbps() / _currentBandwidthMbps.Value;
 		if (double.IsNaN(num) || double.IsInfinity(num))
 		{
 			num = 0.0;

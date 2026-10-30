@@ -123,7 +123,9 @@ internal sealed class OpenMANET_NodeInfo
 			{
 				return "Reported for the connected node only";
 			}
-			string satellites = GpsSatellitesUsed.HasValue ? (GpsSatellitesUsed.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + " of " + (GpsSatellitesInView ?? GpsSatellitesUsed.Value).ToString(System.Globalization.CultureInfo.InvariantCulture) + " satellites") : null;
+			// Firmware that doesn't fill in the satellite status reports 0 of 0 alongside a real fix; that isn't a count.
+			bool satellitesReported = GpsSatellitesUsed.HasValue && (GpsSatellitesUsed.Value > 0 || (GpsSatellitesInView ?? 0) > 0);
+			string satellites = satellitesReported ? (GpsSatellitesUsed.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + " of " + (GpsSatellitesInView ?? GpsSatellitesUsed.Value).ToString(System.Globalization.CultureInfo.InvariantCulture) + " satellites") : null;
 			if (!HasPosition)
 			{
 				return "No fix" + ((GpsSatellitesInView ?? 0) > 0 ? (" · " + GpsSatellitesInView.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + " satellites in view") : string.Empty);

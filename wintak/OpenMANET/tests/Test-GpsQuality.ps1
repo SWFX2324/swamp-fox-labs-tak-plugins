@@ -45,6 +45,8 @@ $moderate = GpsNode @{ Name = "N"; IsSelf = $true; Latitude = [Nullable[double]]
 $nofix = GpsNode @{ Name = "N"; IsSelf = $true; GpsSatellitesInView = [Nullable[int]]3 }
 $other = GpsNode @{ Name = "N"; Latitude = [Nullable[double]]$lat0; Longitude = [Nullable[double]]$lon0 }
 Check "Quality labels: good, moderate, no fix" ($good.GpsQualityDisplay -eq "Good $([char]0xB7) HDOP 1.2 $([char]0xB7) 9 of 12 satellites" -and -not $good.HasPoorGpsFix -and $moderate.GpsQualityDisplay -eq "Moderate $([char]0xB7) HDOP 3.4" -and $nofix.GpsQualityDisplay -eq "No fix $([char]0xB7) 3 satellites in view")
+$zeroCounts = GpsNode @{ Name = "Node0"; IsSelf = $true; Latitude = [Nullable[double]]$lat0; Longitude = [Nullable[double]]$lon0; GpsHdop = [Nullable[double]]11.9; GpsSatellitesUsed = [Nullable[int]]0; GpsSatellitesInView = [Nullable[int]]0 }
+Check "0 of 0 satellites alongside a fix reads as not reported (Node0 firmware)" ($zeroCounts.GpsQualityDisplay -eq "Poor $([char]0xB7) HDOP 11.9")
 Check "Other nodes: quality isn't reported over the mesh" ($other.GpsQualityDisplay -eq "Reported for the connected node only" -and -not $other.HasPoorGpsFix)
 
 # --- Which node's GPS is WinTAK using?

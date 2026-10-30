@@ -6,7 +6,7 @@ Security fixes go into the latest release only. Please update to the newest vers
 
 | Plugin | Supported | Not supported |
 | --- | --- | --- |
-| OpenMANET for WinTAK | 2.1.x (latest) | Anything older |
+| OpenMANET for WinTAK | 2.2.x (latest) | Anything older |
 
 ## Reporting a vulnerability
 
