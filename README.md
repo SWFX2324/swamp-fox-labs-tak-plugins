@@ -1,4 +1,4 @@
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/swamp-fox-labs-logo-dark.svg"><img src="assets/swamp-fox-labs-logo-light.svg" width="420" alt="Swamp Fox Labs"></picture></p>
+<p align="center"><img src="assets/swamp-fox-labs-logo-dark.svg" width="420" alt="Swamp Fox Labs"></p>
 
 # Swamp Fox Labs TAK Plugins
 
