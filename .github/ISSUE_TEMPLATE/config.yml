@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/SWFX2324/swamp-fox-labs-tak-plugins/security/advisories/new
+    about: Please report these privately instead of opening a public issue.

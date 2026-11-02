@@ -1,0 +1,98 @@
+name: Bug report
+description: Something is broken, or the plugin doesn't match what the mesh is doing.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues are public. **Please leave out real node addresses, MACs, hostnames, callsigns, positions and credentials.** Made-up names and addresses show a problem just as well.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Part of the plugin
+      options:
+        - Connecting or reconnecting
+        - Dashboard
+        - Topology
+        - Nodes
+        - System
+        - Settings
+        - Map
+        - Alerts
+        - Callsign sharing
+        - GPS checks
+        - Diagnostics
+        - Install or upgrade
+        - More than one part
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of problem
+      options:
+        - Something doesn't work
+        - The plugin doesn't match what the mesh is doing
+        - Display or layout problem
+        - Install or upgrade problem
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include the exact wording of any message, event or notification.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: If the plugin looks wrong, say what the node's web interface or the radios showed instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Connect to a node over HTTPS
+        2. Power off another node
+        3. See...
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Plugin and WinTAK versions
+      placeholder: Plugin 2.2.2.0, WinTAK 5.8.0.149
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: How were you connected?
+      options:
+        - HTTPS (port 8081)
+        - Legacy HTTP (port 8087)
+        - Not connected
+    validations:
+      required: true
+  - type: textarea
+    id: mesh
+    attributes:
+      label: Mesh setup
+      description: Optional. Number of nodes, how this computer connects, and the firmware version from the System tab. Use made-up node names.
+      placeholder: Two nodes. Laptop on Node B over Wi-Fi, Node A wired to a switch. Firmware OpenMANET 24.10 1.8.0.
+  - type: textarea
+    id: snapshot
+    attributes:
+      label: Redacted support snapshot
+      description: Optional. Use **Settings → Export Redacted Support Snapshot**, never the full operational snapshot, and read it before you paste it.
+      render: text
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Optional. Check that they don't show real network details or positions, including on the map.

@@ -1,0 +1,48 @@
+name: Feature request
+description: Suggest a change or something new.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues are public. **Please leave out real network details, positions and details of real operations.**
+  - type: dropdown
+    id: area
+    attributes:
+      label: Part of the plugin
+      options:
+        - Connecting or reconnecting
+        - Dashboard
+        - Topology
+        - Nodes
+        - System
+        - Settings
+        - Map
+        - Alerts
+        - Callsign sharing
+        - GPS checks
+        - Diagnostics
+        - More than one part
+        - Something new
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the real task, and what makes it hard with the plugin today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: Describe the change you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Node API or data source
+      description: Optional. If this needs data the plugin doesn't use yet, link the OpenMANET API, TAK documentation or other source.

@@ -53,6 +53,10 @@ cd wintak\OpenMANET
 .\build.ps1
 ```
 
+## Contributing
+
+Bug reports, field results and fixes are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md).
+
 ## Security
 
 Please don't report security issues in public issues. See [SECURITY.md](SECURITY.md) for how to report them privately and for an overview of how the plugins handle credentials and network traffic.
