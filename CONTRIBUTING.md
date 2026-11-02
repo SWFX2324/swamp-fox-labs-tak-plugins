@@ -85,7 +85,7 @@ Everything for the plugin is in `wintak/OpenMANET`:
 
 1. Fork the repository and create a branch from `main`.
 2. Keep the pull request to one change, and add tests for any logic you add or fix.
-3. Run `.\build.ps1` and `.\tests\Run-Tests.ps1`. These don't run automatically on pull requests, so include the result.
+3. Run `.\build.ps1` and `.\tests\Run-Tests.ps1`, and include the result. These need WinTAK's SDK, so they don't run automatically. The automated checks on your pull request only cover script syntax, the issue forms, and files that must not be committed.
 4. Fill in the pull request template.
 
 Leave version numbers alone. The maintainer sets them when preparing a release, and may field-test a change on a real mesh first.
