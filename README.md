@@ -26,6 +26,8 @@ A docked WinTAK pane for operators running an OpenMANET mesh:
 
 See the [plugin README](wintak/OpenMANET/README.md) for node status meanings, requirements and build steps.
 
+<br clear="right">
+
 ## Install
 
 1. Download the `.wpk` from [Releases](https://github.com/SWFX2324/swamp-fox-labs-tak-plugins/releases). Each release lists its SHA-256 checksum.
